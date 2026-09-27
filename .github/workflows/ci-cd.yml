@@ -254,8 +254,8 @@ jobs:
           context: ./services/publishing
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/inferops-publishing:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/inferops-publishing:latest
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-publishing:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-publishing:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -265,8 +265,8 @@ jobs:
           context: ./services/discovery
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/inferops-discovery:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/inferops-discovery:latest
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-discovery:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-discovery:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -276,8 +276,8 @@ jobs:
           context: ./services/consumption
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/inferops-consumption:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/inferops-consumption:latest
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-consumption:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-consumption:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -287,8 +287,8 @@ jobs:
           context: ./services/admin
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/inferops-admin:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/inferops-admin:latest
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-admin:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/cortexops-admin:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

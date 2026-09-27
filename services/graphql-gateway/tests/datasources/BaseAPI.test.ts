@@ -44,7 +44,7 @@ describe('BaseAPI', () => {
       expect(fetch).toHaveBeenCalledWith(
         'http://localhost:3000/test',
         expect.objectContaining({
-          method: undefined,
+          method: 'GET',
           headers: expect.objectContaining({
             Authorization: 'Bearer test-token',
           }),
@@ -104,7 +104,7 @@ describe('BaseAPI', () => {
 
   describe('Error handling', () => {
     it('should throw APIError on 404', async () => {
-      fetch.mockResolvedValueOnce({
+      fetch.mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
@@ -146,8 +146,18 @@ describe('BaseAPI', () => {
         timeout: 100,
       });
 
-      fetch.mockImplementationOnce(() =>
-        new Promise((resolve) => setTimeout(resolve, 200))
+      fetch.mockImplementationOnce((_url: string, options: any) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 200);
+          if (options?.signal) {
+            options.signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              const err = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }
+        })
       );
 
       await expect(slowAPI.testGet('/test')).rejects.toThrow('Request timeout');

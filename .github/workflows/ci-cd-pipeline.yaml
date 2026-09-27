@@ -18,7 +18,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/inferops
+  IMAGE_PREFIX: ${{ github.repository_owner }}/cortexops
 
 # Cancel in-progress runs for the same workflow and branch
 concurrency:
@@ -203,38 +203,14 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: [unit-tests]
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run integration tests
         run: |
-          docker-compose -f docker-compose.test.yml up --abort-on-container-exit
-          docker-compose -f docker-compose.test.yml down
+          docker-compose -f tests/e2e/docker-compose.test.yml up --abort-on-container-exit
+          docker-compose -f tests/e2e/docker-compose.test.yml down
 
   # Job 5: Build and Push Docker Images
   build-images:
@@ -466,7 +442,7 @@ jobs:
       - name: Run K6 load tests
         uses: grafana/k6-action@v0.3.1
         with:
-          filename: tests/performance/load-test.js
+          filename: tests/performance/scenarios/load-test.js
           cloud: true
           token: ${{ secrets.K6_CLOUD_TOKEN }}
 

@@ -15,7 +15,7 @@ COPY --chown=marketplace:nodejs src/unified-service/server.js ./server.js
 # Environment configuration
 ENV NODE_ENV=production
 ENV PORT=8080
-ENV SERVICE_NAME=inferops
+ENV SERVICE_NAME=cortexops
 ENV SERVICE_VERSION=1.1.0
 
 # Health check

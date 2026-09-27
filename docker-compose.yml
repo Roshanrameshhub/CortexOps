@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: inferops-postgres
+    container_name: cortexops-postgres
     environment:
       POSTGRES_DB: llm_marketplace
       POSTGRES_USER: marketplace_user
@@ -21,12 +21,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: inferops-redis
+    container_name: cortexops-redis
     command: redis-server --appendonly yes --requirepass redis_password
     ports:
       - "6379:6379"
@@ -38,12 +38,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Elasticsearch
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
-    container_name: inferops-elasticsearch
+    container_name: cortexops-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -64,12 +64,12 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Apache Kafka
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.3
-    container_name: inferops-zookeeper
+    container_name: cortexops-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -79,11 +79,11 @@ services:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_logs:/var/lib/zookeeper/log
     networks:
-      - inferops-network
+      - cortexops-network
 
   kafka:
     image: confluentinc/cp-kafka:7.5.3
-    container_name: inferops-kafka
+    container_name: cortexops-kafka
     depends_on:
       - zookeeper
     environment:
@@ -106,12 +106,12 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Jaeger for Distributed Tracing
   jaeger:
     image: jaegertracing/all-in-one:1.52
-    container_name: inferops-jaeger
+    container_name: cortexops-jaeger
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
@@ -124,12 +124,12 @@ services:
       - "14250:14250"
       - "9411:9411"
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Prometheus for Metrics
   prometheus:
     image: prom/prometheus:v2.48.1
-    container_name: inferops-prometheus
+    container_name: cortexops-prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -141,12 +141,12 @@ services:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Grafana for Visualization
   grafana:
     image: grafana/grafana:10.2.3
-    container_name: inferops-grafana
+    container_name: cortexops-grafana
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
@@ -159,14 +159,14 @@ services:
     depends_on:
       - prometheus
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Publishing Service (TypeScript)
   publishing-service:
     build:
       context: ./services/publishing
       dockerfile: Dockerfile
-    container_name: inferops-publishing
+    container_name: cortexops-publishing
     environment:
       NODE_ENV: development
       PORT: 3001
@@ -188,14 +188,14 @@ services:
       - /app/node_modules
     command: npm run dev
     networks:
-      - inferops-network
+      - cortexops-network
 
   # Admin Service (Python/FastAPI)
   admin-service:
     build:
       context: ./services/admin
       dockerfile: Dockerfile
-    container_name: inferops-admin
+    container_name: cortexops-admin
     environment:
       ENVIRONMENT: development
       PORT: 3004
@@ -212,10 +212,10 @@ services:
       - ./services/admin:/app
     command: uvicorn main:app --host 0.0.0.0 --port 3004 --reload
     networks:
-      - inferops-network
+      - cortexops-network
 
 networks:
-  inferops-network:
+  cortexops-network:
     driver: bridge
 
 volumes:

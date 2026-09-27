@@ -2,7 +2,7 @@
 # Builds and deploys to Google Cloud Run
 
 substitutions:
-  _SERVICE_NAME: 'inferops'
+  _SERVICE_NAME: 'cortexops'
   _REGION: 'us-central1'
   _PLATFORM_ENV: 'dev'
   _MIN_INSTANCES: '0'

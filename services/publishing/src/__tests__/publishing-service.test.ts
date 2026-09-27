@@ -4,17 +4,87 @@
  */
 
 import { PublishingService } from '../services/publishing-service';
-import { ServiceCategory, ServiceStatus, PricingModel, SupportLevel, ComplianceLevel } from '../types';
+import {
+  ServiceCategory,
+  ServiceStatus,
+  PricingModel,
+  SupportLevel,
+  ComplianceLevel,
+  ProtocolType,
+  AuthenticationType,
+} from '../types';
+
+declare global {
+  namespace jest {
+    interface Matchers<R> {
+      toBeIn(expected: any[]): R;
+    }
+  }
+}
 
 // Mock dependencies
-jest.mock('../validators/service-validator');
-jest.mock('../validators/openapi-validator');
-jest.mock('../integrations/registry-client');
-jest.mock('../integrations/policy-engine-client');
-jest.mock('../integrations/analytics-client');
-jest.mock('../integrations/governance-client');
-jest.mock('../config/database');
-jest.mock('../config/redis');
+jest.mock('../validators/service-validator', () => ({
+  ServiceValidator: jest.fn().mockImplementation(() => ({
+    validate: jest.fn().mockImplementation(async (spec: any) => {
+      if (spec.version === 'invalid-version') {
+        throw new Error('Validation failed: Version must be valid semver');
+      }
+      return { isValid: true, errors: [] };
+    }),
+  })),
+}));
+
+jest.mock('../validators/openapi-validator', () => ({
+  OpenAPIValidator: jest.fn().mockImplementation(() => ({
+    validate: jest.fn().mockResolvedValue({ isValid: true, errors: [] }),
+  })),
+}));
+
+jest.mock('../integrations/registry-client', () => ({
+  RegistryClient: jest.fn().mockImplementation(() => ({
+    registerService: jest.fn().mockResolvedValue({ id: 'test-registry-id' }),
+  })),
+}));
+
+jest.mock('../integrations/policy-engine-client', () => ({
+  PolicyEngineClient: jest.fn().mockImplementation(() => ({
+    validateService: jest.fn().mockImplementation(async (spec: any) => {
+      if (spec.endpoint?.url?.startsWith('http://')) {
+        throw new Error('Policy violation: Production services must use HTTPS');
+      }
+      return { compliant: true, violations: [] };
+    }),
+  })),
+}));
+
+jest.mock('../integrations/analytics-client', () => ({
+  AnalyticsClient: jest.fn().mockImplementation(() => ({
+    track: jest.fn().mockResolvedValue(true),
+    trackServicePublished: jest.fn().mockResolvedValue(true),
+    trackValidationFailure: jest.fn().mockResolvedValue(true),
+    trackServiceDeprecated: jest.fn().mockResolvedValue(true),
+    trackServiceUpdated: jest.fn().mockResolvedValue(true),
+  })),
+}));
+
+jest.mock('../integrations/governance-client', () => ({
+  GovernanceClient: jest.fn().mockImplementation(() => ({
+    createApprovalWorkflow: jest.fn().mockResolvedValue({ id: 'test-workflow-id' }),
+    notifyServicePublished: jest.fn().mockResolvedValue(true),
+  })),
+}));
+
+jest.mock('../config/database', () => ({
+  pool: {
+    query: jest.fn().mockResolvedValue({ rows: [] }),
+  },
+}));
+
+jest.mock('../config/redis', () => ({
+  cacheSet: jest.fn().mockResolvedValue(true),
+  cacheGet: jest.fn().mockResolvedValue(null),
+  cacheDelete: jest.fn().mockResolvedValue(true),
+}));
 
 describe('PublishingService', () => {
   let publishingService: PublishingService;
@@ -24,50 +94,50 @@ describe('PublishingService', () => {
     jest.clearAllMocks();
   });
 
-  describe('publishService', () => {
-    const validServiceSpec = {
-      name: 'Test LLM Service',
-      version: '1.0.0',
-      description: 'A test LLM service for unit testing purposes',
-      category: ServiceCategory.TEXT_GENERATION,
-      capabilities: [
+  const validServiceSpec = {
+    name: 'Test LLM Service',
+    version: '1.0.0',
+    description: 'A test LLM service for unit testing purposes',
+    category: ServiceCategory.TEXT_GENERATION,
+    capabilities: [
+      {
+        name: 'text-completion',
+        description: 'Generate text completions',
+        parameters: {
+          prompt: { type: 'string', required: true },
+          max_tokens: { type: 'integer', default: 100 },
+        },
+      },
+    ],
+    endpoint: {
+      url: 'https://api.test.com/v1/completions',
+      protocol: ProtocolType.REST,
+      authentication: AuthenticationType.API_KEY,
+    },
+    pricing: {
+      model: PricingModel.PER_TOKEN,
+      rates: [
         {
-          name: 'text-completion',
-          description: 'Generate text completions',
-          parameters: {
-            prompt: { type: 'string', required: true },
-            max_tokens: { type: 'integer', default: 100 },
-          },
+          tier: 'standard',
+          rate: 0.001,
+          unit: 'tokens',
         },
       ],
-      endpoint: {
-        url: 'https://api.test.com/v1/completions',
-        protocol: 'rest' as const,
-        authentication: 'api-key' as const,
-      },
-      pricing: {
-        model: PricingModel.PER_TOKEN,
-        rates: [
-          {
-            tier: 'standard',
-            rate: 0.001,
-            unit: 'tokens',
-          },
-        ],
-        currency: 'USD',
-      },
-      sla: {
-        availability: 99.9,
-        maxLatency: 2000,
-        supportLevel: SupportLevel.PREMIUM,
-      },
-      compliance: {
-        level: ComplianceLevel.INTERNAL,
-        certifications: ['SOC2'],
-        dataResidency: ['US'],
-      },
-    };
+      currency: 'USD',
+    },
+    sla: {
+      availability: 99.9,
+      maxLatency: 2000,
+      supportLevel: SupportLevel.PREMIUM,
+    },
+    compliance: {
+      level: ComplianceLevel.INTERNAL,
+      certifications: ['SOC2'],
+      dataResidency: ['US'],
+    },
+  };
 
+  describe('publishService', () => {
     it('should successfully publish a valid service', async () => {
       const providerId = 'test-provider-id';
 
@@ -171,6 +241,7 @@ describe('PublishingService', () => {
       const newVersion = '1.1.0';
 
       jest.spyOn(publishingService, 'getService').mockResolvedValue({
+        ...validServiceSpec,
         id: serviceId,
         providerId,
         version: currentVersion,
