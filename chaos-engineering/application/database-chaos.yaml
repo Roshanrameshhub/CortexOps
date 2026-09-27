@@ -1,0 +1,379 @@
+# Application-Level Database Chaos Tests
+# Simulates real-world database failure scenarios
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-chaos-scripts
+  namespace: chaos-testing
+data:
+  # Script to simulate connection pool exhaustion
+  connection-pool-exhaustion.sql: |
+    -- Simulate connection pool exhaustion
+    DO $$
+    DECLARE
+      i INTEGER;
+    BEGIN
+      FOR i IN 1..100 LOOP
+        -- Create long-running query
+        PERFORM pg_sleep(300);
+      END LOOP;
+    END $$;
+
+  # Script to simulate slow query performance
+  slow-query.sql: |
+    -- Generate slow queries
+    SELECT
+      t1.*,
+      t2.*,
+      t3.*
+    FROM
+      generate_series(1, 1000000) AS t1,
+      generate_series(1, 1000) AS t2,
+      generate_series(1, 100) AS t3
+    WHERE
+      t1.generate_series > 500000
+      AND t2.generate_series < 500
+    ORDER BY random()
+    LIMIT 100;
+
+  # Script to simulate lock contention
+  lock-contention.sql: |
+    -- Simulate table locks
+    BEGIN;
+    LOCK TABLE services IN ACCESS EXCLUSIVE MODE;
+    SELECT pg_sleep(60);
+    ROLLBACK;
+
+  # Script to simulate deadlock
+  deadlock.sql: |
+    -- Session 1 and 2 will create deadlock
+    -- Session 1:
+    BEGIN;
+    UPDATE services SET name = 'test1' WHERE id = 1;
+    SELECT pg_sleep(5);
+    UPDATE users SET email = 'test1@example.com' WHERE id = 1;
+    COMMIT;
+
+    -- Session 2:
+    BEGIN;
+    UPDATE users SET email = 'test2@example.com' WHERE id = 1;
+    SELECT pg_sleep(5);
+    UPDATE services SET name = 'test2' WHERE id = 1;
+    COMMIT;
+
+  # Script to simulate replication lag
+  replication-lag.sql: |
+    -- Generate heavy write load
+    INSERT INTO audit_logs (tenant_id, action, metadata)
+    SELECT
+      uuid_generate_v4(),
+      'CHAOS_TEST',
+      jsonb_build_object('iteration', generate_series)
+    FROM generate_series(1, 100000);
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-connection-exhaustion-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: database
+    scenario: connection-exhaustion
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: chaos-injector
+          image: postgres:15
+          env:
+            - name: PGHOST
+              value: "postgres.llm-marketplace.svc.cluster.local"
+            - name: PGDATABASE
+              value: "llm_marketplace"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Starting database connection exhaustion chaos..."
+
+              # Create multiple parallel connections
+              for i in {1..50}; do
+                (
+                  psql -c "SELECT pg_sleep(120);" &
+                ) &
+              done
+
+              echo "Created 50 long-running connections"
+
+              # Wait for connections to be established
+              sleep 130
+
+              echo "Connection exhaustion chaos completed"
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-slow-query-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: database
+    scenario: slow-query
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: chaos-injector
+          image: postgres:15
+          env:
+            - name: PGHOST
+              value: "postgres.llm-marketplace.svc.cluster.local"
+            - name: PGDATABASE
+              value: "llm_marketplace"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          volumeMounts:
+            - name: chaos-scripts
+              mountPath: /chaos
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Starting slow query chaos..."
+
+              # Execute slow queries in parallel
+              for i in {1..10}; do
+                (
+                  psql -f /chaos/slow-query.sql &
+                ) &
+              done
+
+              wait
+
+              echo "Slow query chaos completed"
+      volumes:
+        - name: chaos-scripts
+          configMap:
+            name: database-chaos-scripts
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-transaction-rollback-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: database
+    scenario: transaction-rollback
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: chaos-injector
+          image: postgres:15
+          env:
+            - name: PGHOST
+              value: "postgres.llm-marketplace.svc.cluster.local"
+            - name: PGDATABASE
+              value: "llm_marketplace"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Starting transaction rollback chaos..."
+
+              for i in {1..100}; do
+                # Start transaction
+                psql <<EOF
+                  BEGIN;
+                  INSERT INTO services (id, name, description, tenant_id)
+                  VALUES (uuid_generate_v4(), 'chaos-test-$i', 'Test service', uuid_generate_v4());
+
+                  UPDATE services SET name = 'updated-$i' WHERE name = 'chaos-test-$i';
+
+                  -- Simulate error and rollback
+                  DO \$\$
+                  BEGIN
+                    IF random() > 0.5 THEN
+                      RAISE EXCEPTION 'Simulated chaos error';
+                    END IF;
+                  END \$\$;
+
+                  COMMIT;
+              EOF
+              done
+
+              echo "Transaction rollback chaos completed"
+
+---
+# Database Failover Test
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-failover-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: database
+    scenario: failover
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: chaos-sa
+      containers:
+        - name: chaos-orchestrator
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Starting database failover chaos..."
+
+              # Get primary pod
+              PRIMARY_POD=$(kubectl get pods -n llm-marketplace \
+                -l app=postgres,role=master \
+                -o jsonpath='{.items[0].metadata.name}')
+
+              echo "Primary pod: $PRIMARY_POD"
+
+              # Record pre-failover state
+              echo "Recording connection count before failover..."
+              CONNECTIONS_BEFORE=$(kubectl exec -n llm-marketplace $PRIMARY_POD -- \
+                psql -U postgres -d llm_marketplace -t -c \
+                "SELECT count(*) FROM pg_stat_activity WHERE datname='llm_marketplace';")
+
+              echo "Connections before: $CONNECTIONS_BEFORE"
+
+              # Trigger failover by deleting primary pod
+              echo "Triggering failover by deleting primary pod..."
+              kubectl delete pod -n llm-marketplace $PRIMARY_POD --force --grace-period=0
+
+              # Wait for new primary to be elected
+              echo "Waiting for new primary election..."
+              sleep 30
+
+              # Verify new primary
+              NEW_PRIMARY=$(kubectl get pods -n llm-marketplace \
+                -l app=postgres,role=master \
+                -o jsonpath='{.items[0].metadata.name}')
+
+              echo "New primary pod: $NEW_PRIMARY"
+
+              # Verify connectivity
+              echo "Verifying database connectivity..."
+              kubectl exec -n llm-marketplace $NEW_PRIMARY -- \
+                psql -U postgres -d llm_marketplace -c "SELECT 1;"
+
+              echo "Database failover chaos completed successfully"
+
+---
+# Query Performance Degradation
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-performance-degradation
+  namespace: chaos-testing
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: performance-tester
+              image: postgres:15
+              env:
+                - name: PGHOST
+                  value: "postgres.llm-marketplace.svc.cluster.local"
+                - name: PGDATABASE
+                  value: "llm_marketplace"
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: username
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: password
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  echo "Testing query performance under load..."
+
+                  # Baseline query performance
+                  BASELINE_START=$(date +%s%N)
+                  psql -c "SELECT COUNT(*) FROM services;"
+                  BASELINE_END=$(date +%s%N)
+                  BASELINE_MS=$(( (BASELINE_END - BASELINE_START) / 1000000 ))
+
+                  echo "Baseline query time: ${BASELINE_MS}ms"
+
+                  # Generate load
+                  for i in {1..20}; do
+                    (
+                      psql -c "SELECT * FROM services s1 JOIN users u ON s1.tenant_id = u.tenant_id LIMIT 1000;" &
+                    ) &
+                  done
+
+                  # Measure performance under load
+                  sleep 2
+                  LOAD_START=$(date +%s%N)
+                  psql -c "SELECT COUNT(*) FROM services;"
+                  LOAD_END=$(date +%s%N)
+                  LOAD_MS=$(( (LOAD_END - LOAD_START) / 1000000 ))
+
+                  echo "Under load query time: ${LOAD_MS}ms"
+
+                  # Calculate degradation
+                  DEGRADATION=$(( (LOAD_MS - BASELINE_MS) * 100 / BASELINE_MS ))
+                  echo "Performance degradation: ${DEGRADATION}%"
+
+                  # Alert if degradation > 200%
+                  if [ $DEGRADATION -gt 200 ]; then
+                    echo "WARNING: Significant performance degradation detected!"
+                  fi
+
+                  wait
+                  echo "Performance test completed"

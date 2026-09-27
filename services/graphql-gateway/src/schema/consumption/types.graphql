@@ -1,0 +1,754 @@
+"""
+Time range input for filtering metrics
+"""
+input TimeRangeInput {
+  """
+  Start time (ISO 8601)
+  """
+  startTime: DateTime!
+
+  """
+  End time (ISO 8601)
+  """
+  endTime: DateTime!
+}
+
+"""
+Usage metrics for a service
+"""
+type UsageMetrics {
+  """
+  Service ID
+  """
+  serviceId: ID!
+
+  """
+  Time period for these metrics
+  """
+  period: TimePeriod!
+
+  """
+  Total number of requests
+  """
+  totalRequests: NonNegativeInt!
+
+  """
+  Successful requests
+  """
+  successfulRequests: NonNegativeInt!
+
+  """
+  Failed requests
+  """
+  failedRequests: NonNegativeInt!
+
+  """
+  Average response time (milliseconds)
+  """
+  avgResponseTime: NonNegativeFloat!
+
+  """
+  95th percentile response time (milliseconds)
+  """
+  p95ResponseTime: NonNegativeFloat!
+
+  """
+  99th percentile response time (milliseconds)
+  """
+  p99ResponseTime: NonNegativeFloat!
+
+  """
+  Total data transferred (bytes)
+  """
+  dataTransferred: NonNegativeInt!
+
+  """
+  Cost incurred for this period
+  """
+  cost: Money!
+
+  """
+  Usage by endpoint
+  """
+  byEndpoint: [EndpointUsage!]!
+
+  """
+  Usage over time (time series data)
+  """
+  timeSeries: [TimeSeriesDataPoint!]!
+
+  """
+  Error breakdown
+  """
+  errors: [ErrorBreakdown!]!
+}
+
+"""
+Time period information
+"""
+type TimePeriod {
+  """
+  Start time
+  """
+  start: DateTime!
+
+  """
+  End time
+  """
+  end: DateTime!
+
+  """
+  Duration in seconds
+  """
+  duration: PositiveInt!
+}
+
+"""
+Money amount with currency
+"""
+type Money {
+  """
+  Amount
+  """
+  amount: NonNegativeFloat!
+
+  """
+  Currency code (ISO 4217)
+  """
+  currency: String!
+
+  """
+  Formatted string (e.g., "$123.45")
+  """
+  formatted: String!
+}
+
+"""
+Usage metrics for a specific endpoint
+"""
+type EndpointUsage {
+  """
+  Endpoint path
+  """
+  endpoint: String!
+
+  """
+  HTTP method
+  """
+  method: String!
+
+  """
+  Number of requests
+  """
+  requests: NonNegativeInt!
+
+  """
+  Average response time (milliseconds)
+  """
+  avgResponseTime: NonNegativeFloat!
+
+  """
+  Error rate (0-1)
+  """
+  errorRate: NonNegativeFloat!
+}
+
+"""
+Time series data point
+"""
+type TimeSeriesDataPoint {
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  Value at this point
+  """
+  value: NonNegativeFloat!
+
+  """
+  Request count at this point
+  """
+  requests: NonNegativeInt!
+
+  """
+  Error count at this point
+  """
+  errors: NonNegativeInt!
+}
+
+"""
+Error breakdown by type
+"""
+type ErrorBreakdown {
+  """
+  Error code
+  """
+  code: String!
+
+  """
+  Error message
+  """
+  message: String!
+
+  """
+  Number of occurrences
+  """
+  count: NonNegativeInt!
+
+  """
+  Percentage of total requests
+  """
+  percentage: NonNegativeFloat!
+}
+
+"""
+Quota information for a service
+"""
+type Quota {
+  """
+  Service ID
+  """
+  serviceId: ID!
+
+  """
+  User ID
+  """
+  userId: ID!
+
+  """
+  Quota limit (requests per period)
+  """
+  limit: PositiveInt!
+
+  """
+  Current usage
+  """
+  used: NonNegativeInt!
+
+  """
+  Remaining quota
+  """
+  remaining: NonNegativeInt!
+
+  """
+  Quota period type
+  """
+  period: QuotaPeriod!
+
+  """
+  When the quota resets
+  """
+  resetsAt: DateTime!
+
+  """
+  Percentage used (0-100)
+  """
+  percentageUsed: NonNegativeFloat!
+
+  """
+  Whether quota is exceeded
+  """
+  isExceeded: Boolean!
+
+  """
+  Overage allowed
+  """
+  overageAllowed: Boolean!
+
+  """
+  Current overage count
+  """
+  overageCount: NonNegativeInt!
+}
+
+"""
+Quota period types
+"""
+enum QuotaPeriod {
+  """
+  Hourly quota
+  """
+  HOURLY
+
+  """
+  Daily quota
+  """
+  DAILY
+
+  """
+  Weekly quota
+  """
+  WEEKLY
+
+  """
+  Monthly quota
+  """
+  MONTHLY
+
+  """
+  Annual quota
+  """
+  ANNUAL
+}
+
+"""
+SLA metrics for a service
+"""
+type SLAMetrics {
+  """
+  Service ID
+  """
+  serviceId: ID!
+
+  """
+  Time period
+  """
+  period: TimePeriod!
+
+  """
+  Uptime percentage (0-100)
+  """
+  uptime: NonNegativeFloat!
+
+  """
+  Availability percentage (0-100)
+  """
+  availability: NonNegativeFloat!
+
+  """
+  Average response time (milliseconds)
+  """
+  avgResponseTime: NonNegativeFloat!
+
+  """
+  SLA target uptime (0-100)
+  """
+  targetUptime: NonNegativeFloat!
+
+  """
+  SLA target response time (milliseconds)
+  """
+  targetResponseTime: NonNegativeFloat!
+
+  """
+  Whether SLA is met
+  """
+  slaMet: Boolean!
+
+  """
+  SLA violations
+  """
+  violations: [SLAViolation!]!
+
+  """
+  Credits earned due to violations
+  """
+  credits: Money
+
+  """
+  Total downtime (seconds)
+  """
+  totalDowntime: NonNegativeInt!
+
+  """
+  Incident count
+  """
+  incidentCount: NonNegativeInt!
+
+  """
+  Mean time to recovery (MTTR) in seconds
+  """
+  mttr: NonNegativeFloat
+}
+
+"""
+SLA violation record
+"""
+type SLAViolation {
+  """
+  Violation ID
+  """
+  id: ID!
+
+  """
+  Violation type
+  """
+  type: SLAViolationType!
+
+  """
+  When violation started
+  """
+  startTime: DateTime!
+
+  """
+  When violation ended
+  """
+  endTime: DateTime
+
+  """
+  Duration (seconds)
+  """
+  duration: NonNegativeInt!
+
+  """
+  Severity level
+  """
+  severity: ViolationSeverity!
+
+  """
+  Description
+  """
+  description: String!
+
+  """
+  Impact on users
+  """
+  impact: String
+
+  """
+  Credit amount
+  """
+  credit: Money
+}
+
+"""
+SLA violation types
+"""
+enum SLAViolationType {
+  """
+  Uptime violation
+  """
+  UPTIME
+
+  """
+  Response time violation
+  """
+  RESPONSE_TIME
+
+  """
+  Error rate violation
+  """
+  ERROR_RATE
+
+  """
+  Availability violation
+  """
+  AVAILABILITY
+}
+
+"""
+Violation severity levels
+"""
+enum ViolationSeverity {
+  """
+  Low severity
+  """
+  LOW
+
+  """
+  Medium severity
+  """
+  MEDIUM
+
+  """
+  High severity
+  """
+  HIGH
+
+  """
+  Critical severity
+  """
+  CRITICAL
+}
+
+"""
+Billing information for a service
+"""
+type BillingInfo {
+  """
+  Service ID
+  """
+  serviceId: ID!
+
+  """
+  User ID
+  """
+  userId: ID!
+
+  """
+  Billing period
+  """
+  period: TimePeriod!
+
+  """
+  Total cost
+  """
+  totalCost: Money!
+
+  """
+  Base cost (subscription/fixed)
+  """
+  baseCost: Money!
+
+  """
+  Usage cost (variable)
+  """
+  usageCost: Money!
+
+  """
+  Overage cost
+  """
+  overageCost: Money!
+
+  """
+  Discounts applied
+  """
+  discounts: [Discount!]!
+
+  """
+  Total discount amount
+  """
+  totalDiscount: Money!
+
+  """
+  Credits applied
+  """
+  credits: Money!
+
+  """
+  Net amount due
+  """
+  amountDue: Money!
+
+  """
+  Payment status
+  """
+  paymentStatus: PaymentStatus!
+
+  """
+  Due date
+  """
+  dueDate: DateTime!
+
+  """
+  Invoice number
+  """
+  invoiceNumber: String
+
+  """
+  Invoice URL
+  """
+  invoiceUrl: URL
+
+  """
+  Billing breakdown
+  """
+  breakdown: [BillingBreakdown!]!
+}
+
+"""
+Discount applied to billing
+"""
+type Discount {
+  """
+  Discount ID
+  """
+  id: ID!
+
+  """
+  Discount code
+  """
+  code: String
+
+  """
+  Discount type
+  """
+  type: DiscountType!
+
+  """
+  Discount amount or percentage
+  """
+  value: NonNegativeFloat!
+
+  """
+  Amount saved
+  """
+  amount: Money!
+
+  """
+  Description
+  """
+  description: String!
+}
+
+"""
+Discount types
+"""
+enum DiscountType {
+  """
+  Percentage discount
+  """
+  PERCENTAGE
+
+  """
+  Fixed amount discount
+  """
+  FIXED
+
+  """
+  Volume discount
+  """
+  VOLUME
+
+  """
+  Promotional discount
+  """
+  PROMOTIONAL
+}
+
+"""
+Payment status
+"""
+enum PaymentStatus {
+  """
+  Payment pending
+  """
+  PENDING
+
+  """
+  Payment processing
+  """
+  PROCESSING
+
+  """
+  Payment completed
+  """
+  PAID
+
+  """
+  Payment failed
+  """
+  FAILED
+
+  """
+  Payment overdue
+  """
+  OVERDUE
+
+  """
+  Payment cancelled
+  """
+  CANCELLED
+
+  """
+  Refunded
+  """
+  REFUNDED
+}
+
+"""
+Billing breakdown item
+"""
+type BillingBreakdown {
+  """
+  Item description
+  """
+  description: String!
+
+  """
+  Quantity
+  """
+  quantity: NonNegativeInt!
+
+  """
+  Unit price
+  """
+  unitPrice: Money!
+
+  """
+  Total price
+  """
+  totalPrice: Money!
+
+  """
+  Item category
+  """
+  category: String
+}
+
+"""
+Track usage input
+"""
+input TrackUsageInput {
+  """
+  Endpoint that was called
+  """
+  endpoint: String!
+
+  """
+  HTTP method
+  """
+  method: String!
+
+  """
+  Response status code
+  """
+  statusCode: PositiveInt!
+
+  """
+  Response time (milliseconds)
+  """
+  responseTime: NonNegativeFloat!
+
+  """
+  Request size (bytes)
+  """
+  requestSize: NonNegativeInt
+
+  """
+  Response size (bytes)
+  """
+  responseSize: NonNegativeInt
+
+  """
+  Client IP address
+  """
+  clientIp: String
+
+  """
+  User agent
+  """
+  userAgent: String
+
+  """
+  Additional metadata
+  """
+  metadata: JSON
+}
+
+"""
+Track usage result
+"""
+type TrackUsageResult {
+  """
+  Whether tracking was successful
+  """
+  success: Boolean!
+
+  """
+  Usage ID
+  """
+  usageId: ID
+
+  """
+  Current quota information
+  """
+  quota: Quota
+
+  """
+  Warning messages
+  """
+  warnings: [String!]
+}

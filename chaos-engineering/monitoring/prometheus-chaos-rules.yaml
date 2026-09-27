@@ -1,0 +1,424 @@
+# Prometheus Alerting Rules for Chaos Engineering
+# Monitors system behavior during chaos experiments
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-chaos-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: chaos-monitoring
+data:
+  chaos-alerts.yml: |
+    groups:
+      # Chaos Experiment Monitoring
+      - name: chaos_experiments
+        interval: 10s
+        rules:
+          # Alert when chaos experiment is running
+          - alert: ChaosExperimentActive
+            expr: |
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 0s
+            labels:
+              severity: info
+              category: chaos
+            annotations:
+              summary: "Chaos experiment {{ $labels.experiment }} is running"
+              description: "Chaos experiment {{ $labels.experiment }} in namespace {{ $labels.namespace }} is currently active"
+
+          # Alert when chaos experiment fails
+          - alert: ChaosExperimentFailed
+            expr: |
+              chaos_mesh_experiments_total{status="failed"} > 0
+            for: 1m
+            labels:
+              severity: warning
+              category: chaos
+            annotations:
+              summary: "Chaos experiment {{ $labels.experiment }} failed"
+              description: "Chaos experiment {{ $labels.experiment }} has failed. Check chaos-testing namespace for details."
+
+      # SLO Monitoring During Chaos
+      - name: chaos_slo_violations
+        interval: 10s
+        rules:
+          # Error rate exceeds threshold during chaos
+          - alert: ChaosErrorRateHigh
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"5.."}[1m]))
+                /
+                sum(rate(http_requests_total[1m]))
+              ) > 0.05
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: critical
+              category: chaos-slo
+            annotations:
+              summary: "Error rate exceeds 5% during chaos experiment"
+              description: "Error rate is {{ $value | humanizePercentage }} which exceeds the 5% threshold during active chaos experiments"
+              runbook: "https://docs.llm-marketplace.io/runbooks/chaos-error-rate"
+
+          # Latency p95 exceeds threshold
+          - alert: ChaosLatencyHigh
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[1m])) by (le, service)
+              ) > 2.0
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 3m
+            labels:
+              severity: warning
+              category: chaos-slo
+            annotations:
+              summary: "P95 latency exceeds 2s for {{ $labels.service }} during chaos"
+              description: "{{ $labels.service }} P95 latency is {{ $value }}s during active chaos experiments"
+
+          # Request success rate drops below threshold
+          - alert: ChaosSuccessRateLow
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"2.."}[1m])) by (service)
+                /
+                sum(rate(http_requests_total[1m])) by (service)
+              ) < 0.95
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: warning
+              category: chaos-slo
+            annotations:
+              summary: "Success rate below 95% for {{ $labels.service }}"
+              description: "{{ $labels.service }} success rate is {{ $value | humanizePercentage }} during chaos testing"
+
+      # Infrastructure Resilience
+      - name: chaos_infrastructure
+        interval: 15s
+        rules:
+          # Pod restart rate during chaos
+          - alert: ChaosPodRestartHigh
+            expr: |
+              rate(kube_pod_container_status_restarts_total[5m]) > 0.1
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: warning
+              category: chaos-infrastructure
+            annotations:
+              summary: "High pod restart rate during chaos: {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting at {{ $value }} restarts/sec"
+
+          # Deployment replica count below desired
+          - alert: ChaosReplicaCountLow
+            expr: |
+              (
+                kube_deployment_status_replicas_available
+                /
+                kube_deployment_spec_replicas
+              ) < 0.5
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 3m
+            labels:
+              severity: critical
+              category: chaos-infrastructure
+            annotations:
+              summary: "{{ $labels.deployment }} has less than 50% replicas available"
+              description: "Deployment {{ $labels.deployment }} has {{ $value | humanizePercentage }} of desired replicas during chaos"
+
+          # Node pressure during chaos
+          - alert: ChaosNodePressure
+            expr: |
+              kube_node_status_condition{condition=~"MemoryPressure|DiskPressure|PIDPressure",status="true"} > 0
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 5m
+            labels:
+              severity: warning
+              category: chaos-infrastructure
+            annotations:
+              summary: "Node {{ $labels.node }} experiencing {{ $labels.condition }}"
+              description: "Node {{ $labels.node }} is under {{ $labels.condition }} during active chaos experiments"
+
+      # Database Resilience
+      - name: chaos_database
+        interval: 15s
+        rules:
+          # Database connection pool exhaustion
+          - alert: ChaosDatabaseConnectionsHigh
+            expr: |
+              (
+                pg_stat_database_numbackends
+                /
+                pg_settings_max_connections
+              ) > 0.8
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: warning
+              category: chaos-database
+            annotations:
+              summary: "Database connections exceed 80% during chaos"
+              description: "PostgreSQL is using {{ $value | humanizePercentage }} of max connections during chaos testing"
+
+          # Database replication lag
+          - alert: ChaosDatabaseReplicationLag
+            expr: |
+              pg_replication_lag_seconds > 30
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 3m
+            labels:
+              severity: warning
+              category: chaos-database
+            annotations:
+              summary: "Database replication lag exceeds 30s"
+              description: "Replication lag is {{ $value }}s for replica {{ $labels.application_name }}"
+
+          # Transaction rollback rate
+          - alert: ChaosDatabaseRollbackRateHigh
+            expr: |
+              rate(pg_stat_database_xact_rollback[1m]) > 10
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: warning
+              category: chaos-database
+            annotations:
+              summary: "High transaction rollback rate during chaos"
+              description: "Database {{ $labels.datname }} has {{ $value }} rollbacks/sec during chaos experiments"
+
+      # Cache Resilience
+      - name: chaos_cache
+        interval: 15s
+        rules:
+          # Redis memory usage high
+          - alert: ChaosRedisMemoryHigh
+            expr: |
+              (
+                redis_memory_used_bytes
+                /
+                redis_memory_max_bytes
+              ) > 0.9
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: warning
+              category: chaos-cache
+            annotations:
+              summary: "Redis memory usage exceeds 90%"
+              description: "Redis instance {{ $labels.instance }} is using {{ $value | humanizePercentage }} of max memory"
+
+          # Cache eviction rate high
+          - alert: ChaosRedisEvictionRateHigh
+            expr: |
+              rate(redis_evicted_keys_total[1m]) > 100
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 2m
+            labels:
+              severity: warning
+              category: chaos-cache
+            annotations:
+              summary: "High Redis eviction rate during chaos"
+              description: "Redis is evicting {{ $value }} keys/sec during chaos experiments"
+
+          # Cache hit rate low
+          - alert: ChaosCacheHitRateLow
+            expr: |
+              (
+                rate(redis_keyspace_hits_total[5m])
+                /
+                (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))
+              ) < 0.7
+              and
+              chaos_mesh_experiments_total{status="running"} > 0
+            for: 3m
+            labels:
+              severity: info
+              category: chaos-cache
+            annotations:
+              summary: "Cache hit rate below 70%"
+              description: "Redis cache hit rate is {{ $value | humanizePercentage }} during chaos testing"
+
+      # Recovery Validation
+      - name: chaos_recovery
+        interval: 30s
+        rules:
+          # System not recovering after chaos
+          - alert: ChaosRecoveryStalled
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"5.."}[5m]))
+                /
+                sum(rate(http_requests_total[5m]))
+              ) > 0.01
+              and
+              chaos_mesh_experiments_total{status="running"} == 0
+              and
+              time() - chaos_mesh_experiments_end_time_seconds < 600
+            for: 5m
+            labels:
+              severity: critical
+              category: chaos-recovery
+            annotations:
+              summary: "System not recovering 5 minutes after chaos experiment ended"
+              description: "Error rate remains at {{ $value | humanizePercentage }} after chaos experiments completed"
+              runbook: "https://docs.llm-marketplace.io/runbooks/chaos-recovery-stalled"
+
+          # Slow recovery time
+          - alert: ChaosSlowRecovery
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[1m])) by (le)
+              ) > 1.0
+              and
+              chaos_mesh_experiments_total{status="running"} == 0
+              and
+              time() - chaos_mesh_experiments_end_time_seconds < 300
+            for: 3m
+            labels:
+              severity: warning
+              category: chaos-recovery
+            annotations:
+              summary: "Latency still elevated 3 minutes after chaos"
+              description: "P95 latency is {{ $value }}s after chaos experiments completed"
+
+---
+# ServiceMonitor for Chaos Mesh metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: chaos-mesh-monitor
+  namespace: monitoring
+  labels:
+    app: chaos-mesh
+spec:
+  selector:
+    matchLabels:
+      app: chaos-mesh-controller-manager
+  namespaceSelector:
+    matchNames:
+      - chaos-testing
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scheme: http
+
+---
+# ServiceMonitor for Litmus metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: litmus-monitor
+  namespace: monitoring
+  labels:
+    app: litmus
+spec:
+  selector:
+    matchLabels:
+      app: chaos-exporter
+  namespaceSelector:
+    matchNames:
+      - chaos-testing
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scheme: http
+
+---
+# Recording rules for chaos metrics
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-chaos-recording-rules
+  namespace: monitoring
+data:
+  chaos-recording-rules.yml: |
+    groups:
+      - name: chaos_metrics_recording
+        interval: 15s
+        rules:
+          # Record total chaos experiments
+          - record: chaos:experiments:total
+            expr: sum(chaos_mesh_experiments_total) by (namespace, experiment, status)
+
+          # Record chaos blast radius
+          - record: chaos:blast_radius:percentage
+            expr: |
+              (
+                count(kube_pod_labels{label_chaos_target="true"})
+                /
+                count(kube_pod_labels)
+              ) * 100
+
+          # Record SLO compliance during chaos
+          - record: chaos:slo:error_rate:1m
+            expr: |
+              sum(rate(http_requests_total{status=~"5.."}[1m]))
+              /
+              sum(rate(http_requests_total[1m]))
+
+          - record: chaos:slo:latency:p95:1m
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[1m])) by (le, service)
+              )
+
+          - record: chaos:slo:latency:p99:1m
+            expr: |
+              histogram_quantile(0.99,
+                sum(rate(http_request_duration_seconds_bucket[1m])) by (le, service)
+              )
+
+          # Record pod availability during chaos
+          - record: chaos:pods:availability:percentage
+            expr: |
+              (
+                sum(kube_pod_status_phase{phase="Running"}) by (namespace)
+                /
+                sum(kube_pod_status_phase) by (namespace)
+              ) * 100
+
+          # Record database health during chaos
+          - record: chaos:database:connection_utilization
+            expr: |
+              (
+                pg_stat_database_numbackends
+                /
+                pg_settings_max_connections
+              )
+
+          - record: chaos:database:query_time:p95
+            expr: |
+              histogram_quantile(0.95,
+                rate(pg_stat_statements_mean_time_bucket[1m])
+              )
+
+          # Record cache health during chaos
+          - record: chaos:cache:hit_rate
+            expr: |
+              rate(redis_keyspace_hits_total[5m])
+              /
+              (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))
+
+          - record: chaos:cache:memory_utilization
+            expr: |
+              redis_memory_used_bytes / redis_memory_max_bytes
+
+          # Recovery time tracking
+          - record: chaos:recovery:duration_seconds
+            expr: |
+              time() - chaos_mesh_experiments_end_time_seconds

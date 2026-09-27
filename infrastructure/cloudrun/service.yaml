@@ -1,0 +1,147 @@
+# LLM-Marketplace Cloud Run Service Configuration
+# Unified service exposing all marketplace agents
+#
+# Deploy with:
+#   gcloud run services replace infrastructure/cloudrun/service.yaml --region=us-central1
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: llm-marketplace
+  labels:
+    app: llm-marketplace
+    team: agentics
+    component: marketplace
+  annotations:
+    run.googleapis.com/description: "LLM Marketplace - Asset packaging, distribution, and lifecycle management"
+    run.googleapis.com/ingress: all
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scaling configuration
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+
+        # Resource allocation
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/startup-cpu-boost: "true"
+
+        # Execution environment
+        run.googleapis.com/execution-environment: gen2
+
+        # VPC connector for internal services (configure per environment)
+        # run.googleapis.com/vpc-access-connector: projects/agentics-dev/locations/us-central1/connectors/marketplace-connector
+        # run.googleapis.com/vpc-access-egress: private-ranges-only
+
+      labels:
+        app: llm-marketplace
+        version: "1.0.0"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: marketplace-sa@agentics-dev.iam.gserviceaccount.com
+
+      containers:
+        - name: llm-marketplace
+          image: gcr.io/agentics-dev/llm-marketplace:latest
+
+          ports:
+            - name: http1
+              containerPort: 8080
+
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+
+          env:
+            # Service identification
+            - name: SERVICE_NAME
+              value: "llm-marketplace"
+            - name: SERVICE_VERSION
+              value: "1.0.0"
+            - name: NODE_ENV
+              value: "production"
+
+            # Platform environment (dev | staging | prod)
+            - name: PLATFORM_ENV
+              value: "dev"
+
+            # RuVector Service (persistence layer)
+            - name: RUVECTOR_SERVICE_URL
+              value: "https://ruvector-service-dev.run.app"
+            - name: RUVECTOR_TIMEOUT_MS
+              value: "30000"
+            - name: RUVECTOR_RETRY_ATTEMPTS
+              value: "3"
+
+            # RuVector API Key from Secret Manager
+            - name: RUVECTOR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ruvector-api-key
+                  key: latest
+
+            # Telemetry (LLM-Observatory)
+            - name: TELEMETRY_ENDPOINT
+              value: "https://llm-observatory-dev.run.app"
+            - name: TELEMETRY_ENABLED
+              value: "true"
+
+            # Registry Service
+            - name: REGISTRY_SERVICE_URL
+              value: "https://llm-registry-dev.run.app"
+            - name: REGISTRY_TIMEOUT_MS
+              value: "10000"
+
+            # Storage (GCS for package artifacts)
+            - name: STORAGE_BUCKET
+              value: "llm-marketplace-packages-dev"
+            - name: STORAGE_REGION
+              value: "us-central1"
+
+            # CORS configuration
+            - name: CORS_ORIGIN
+              value: "*"
+
+            # Logging
+            - name: LOG_LEVEL
+              value: "info"
+            - name: LOG_FORMAT
+              value: "json"
+
+          # Startup probe - allows time for cold start
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
+
+          # Liveness probe
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          # Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+  traffic:
+    - percent: 100
+      latestRevision: true

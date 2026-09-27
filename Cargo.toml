@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/llm-infra",
+    "services/consumption",
+    "marketplace-benchmarks",
+]
+
+[workspace.package]
+edition = "2021"
+authors = ["LLM-Dev-Ops Team"]
+license = "MIT"
+repository = "https://github.com/roshanrameshhub/inferops"
+
+[workspace.dependencies]
+# LLM-Dev-Ops Infra crate (local)
+llm-infra = { path = "crates/llm-infra" }
+
+# LLM-Dev-Ops upstream dependencies (Phase 2A - compile-time)
+llm-registry-core = { git = "https://github.com/LLM-Dev-Ops/registry", branch = "main" }
+llm-shield-core = { git = "https://github.com/LLM-Dev-Ops/shield", branch = "main" }
+llm-policy-engine = { git = "https://github.com/LLM-Dev-Ops/policy-engine", branch = "main" }
+
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Web frameworks
+axum = { version = "0.7", features = ["macros"] }
+actix-web = "4.4"
+
+# Database
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "chrono", "json"] }
+redis = { version = "0.25", features = ["tokio-comp", "connection-manager"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+opentelemetry = { version = "0.22", features = ["trace"] }
+opentelemetry-jaeger = "0.21"
+tracing-opentelemetry = "0.23"
+prometheus = "0.13"
+
+# Utilities
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+config = "0.14"
+dotenvy = "0.15"
+
+# Testing
+criterion = { version = "0.5", features = ["html_reports"] }
+mockito = "1.2"
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

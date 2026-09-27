@@ -1,0 +1,273 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm-marketplace
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-engine-config
+  namespace: llm-marketplace
+data:
+  config.yaml: |
+    server:
+      port: 50051
+      host: "0.0.0.0"
+      read_timeout: 30s
+      write_timeout: 30s
+      max_connections: 1000
+      enable_reflection: true
+      enable_health_check: true
+
+    database:
+      host: postgres
+      port: 5432
+      user: postgres
+      database: policy_engine
+      ssl_mode: require
+      max_connections: 25
+      max_idle_conns: 5
+      conn_max_lifetime: 5m
+
+    cache:
+      enabled: true
+      ttl: 5m
+      max_size: 1000
+      cleanup_interval: 10m
+
+    observability:
+      metrics:
+        enabled: true
+        port: 9090
+        path: /metrics
+
+      tracing:
+        enabled: true
+        jaeger_url: http://jaeger-collector:14268/api/traces
+        service_name: policy-engine
+        sampling_rate: 0.1
+
+      logging:
+        level: info
+        format: json
+        output: stdout
+        time_format: "2006-01-02T15:04:05Z07:00"
+
+    policies:
+      default_version: "1.0.0"
+      reload_interval: 5m
+      enable_auto_reload: true
+      validation_timeout: 5s
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: policy-engine-secrets
+  namespace: llm-marketplace
+type: Opaque
+stringData:
+  DB_PASSWORD: "postgres"  # Change in production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-engine
+  namespace: llm-marketplace
+  labels:
+    app: policy-engine
+    version: v1
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: policy-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: policy-engine
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: policy-engine
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - policy-engine
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: policy-engine
+          image: ghcr.io/llm-marketplace/policy-engine:latest
+          imagePullPolicy: Always
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: CONFIG_PATH
+              value: /config/config.yaml
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: postgres
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: policy-engine-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              value: policy_engine
+            - name: DB_SSL_MODE
+              value: require
+            - name: LOG_LEVEL
+              value: info
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "grpc-health-probe -addr=:50051 || exit 1"
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "grpc-health-probe -addr=:50051 || exit 1"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: policy-engine-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-engine
+  namespace: llm-marketplace
+  labels:
+    app: policy-engine
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app: policy-engine
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: policy-engine
+  namespace: llm-marketplace
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: policy-engine-pdb
+  namespace: llm-marketplace
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: policy-engine
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: policy-engine-hpa
+  namespace: llm-marketplace
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: policy-engine
+  minReplicas: 3
+  maxReplicas: 100
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+        - type: Pods
+          value: 5
+          periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Min

@@ -1,0 +1,162 @@
+# Network Partition Chaos Experiment
+# Simulates network splits to test partition tolerance
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: database-partition
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: network
+    severity: high
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: postgres
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        tier: backend
+  duration: "2m"
+  # Abort if error rate exceeds 10%
+  externalDevice: eth0
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: service-mesh-partition
+  namespace: chaos-testing
+spec:
+  action: partition
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: graphql-gateway
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        app: ml-recommendations
+  duration: "3m"
+
+---
+# Split-brain scenario - partition between replicas
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: redis-split-brain
+  namespace: chaos-testing
+spec:
+  action: partition
+  mode: fixed
+  value: "1"
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: redis
+      role: master
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        app: redis
+        role: replica
+  duration: "1m"
+
+---
+# Bandwidth limitation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: bandwidth-limit
+  namespace: chaos-testing
+spec:
+  action: bandwidth
+  mode: all
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: graphql-gateway
+  bandwidth:
+    rate: "1mbps"
+    limit: 20000
+    buffer: 10000
+  duration: "5m"
+
+---
+# Packet loss
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: packet-loss
+  namespace: chaos-testing
+spec:
+  action: loss
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      tier: backend
+  loss:
+    loss: "25"
+    correlation: "25"
+  duration: "3m"
+
+---
+# Packet corruption
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: packet-corrupt
+  namespace: chaos-testing
+spec:
+  action: corrupt
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+  corrupt:
+    corrupt: "10"
+    correlation: "25"
+  duration: "2m"
+
+---
+# Packet duplication
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: packet-duplicate
+  namespace: chaos-testing
+spec:
+  action: duplicate
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: ml-recommendations
+  duplicate:
+    duplicate: "20"
+    correlation: "25"
+  duration: "2m"

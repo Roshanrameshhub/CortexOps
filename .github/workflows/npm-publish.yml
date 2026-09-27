@@ -1,0 +1,208 @@
+name: Publish to NPM
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linters
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all packages
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            services/*/dist
+            sdks/*/dist
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+
+      - name: Bump version (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          npm version ${{ github.event.inputs.version }} --workspaces --no-git-tag-version
+          git add .
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin main --tags
+
+      - name: Publish to NPM - SDK
+        run: npm publish --workspace=sdks/javascript --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: false
+
+      - name: Publish to NPM - Model Marketplace
+        run: npm publish --workspace=services/model-marketplace --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true
+
+      - name: Publish to NPM - Tenant Management
+        run: npm publish --workspace=services/tenant-management --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true
+
+      - name: Publish to NPM - GraphQL Gateway
+        run: npm publish --workspace=services/graphql-gateway --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true
+
+      - name: Create GitHub Release Summary
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "## 📦 Published Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following packages have been published to NPM:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [@llm-dev-ops/llm-marketplace-sdk](https://www.npmjs.com/package/@llm-dev-ops/llm-marketplace-sdk)" >> $GITHUB_STEP_SUMMARY
+          echo "- [@llm-dev-ops/llm-marketplace-model-marketplace](https://www.npmjs.com/package/@llm-dev-ops/llm-marketplace-model-marketplace)" >> $GITHUB_STEP_SUMMARY
+          echo "- [@llm-dev-ops/llm-marketplace-tenant-management](https://www.npmjs.com/package/@llm-dev-ops/llm-marketplace-tenant-management)" >> $GITHUB_STEP_SUMMARY
+          echo "- [@llm-dev-ops/llm-marketplace-graphql-gateway](https://www.npmjs.com/package/@llm-dev-ops/llm-marketplace-graphql-gateway)" >> $GITHUB_STEP_SUMMARY
+
+  publish-dry-run:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+
+      - name: Dry run publish
+        run: npm publish --workspaces --access public --dry-run
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `## 🧪 NPM Publish Dry Run
+
+            ✅ All packages are ready to be published.
+
+            **Packages that will be published:**
+            - @llm-dev-ops/llm-marketplace-sdk
+            - @llm-dev-ops/llm-marketplace-model-marketplace
+            - @llm-dev-ops/llm-marketplace-tenant-management
+            - @llm-dev-ops/llm-marketplace-graphql-gateway
+
+            *This was a dry run. No packages were actually published.*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });

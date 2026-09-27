@@ -1,0 +1,73 @@
+{
+  "dashboard": {
+    "title": "Performance Test Metrics",
+    "tags": ["performance", "k6", "testing"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(http_reqs_total[5m])",
+            "legendFormat": "Requests per second"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Response Time (P95)",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_req_duration_bucket[5m]))",
+            "legendFormat": "P95 Latency"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(http_req_failed_total[5m])",
+            "legendFormat": "Error Rate"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Virtual Users",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "vus",
+            "legendFormat": "Active VUs"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Performance Trend (Last 30 Days)",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "expr": "http_req_duration_p95",
+            "legendFormat": "P95 Latency Trend"
+          }
+        ],
+        "timeFrom": "30d"
+      }
+    ]
+  }
+}

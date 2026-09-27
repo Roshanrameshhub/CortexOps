@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm-marketplace
+  labels:
+    name: llm-marketplace
+    istio-injection: enabled
+    monitoring: enabled

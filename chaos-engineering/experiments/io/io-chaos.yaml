@@ -1,0 +1,196 @@
+# IO Chaos Experiments
+# Tests file system and disk I/O failures
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: io-delay
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: io
+    severity: medium
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: postgres
+  volumePath: /var/lib/postgresql/data
+  path: /var/lib/postgresql/data/**/*
+  delay: "200ms"
+  percent: 80
+  duration: "5m"
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: io-errno
+  namespace: chaos-testing
+spec:
+  action: errno
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: ml-recommendations
+  volumePath: /app/models
+  path: /app/models/*.pkl
+  errno: 5  # EIO - Input/output error
+  percent: 30
+  duration: "2m"
+
+---
+# Read-only file system simulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: readonly-fs
+  namespace: chaos-testing
+spec:
+  action: errno
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+  volumePath: /var/lib/data
+  path: /var/lib/data/**/*
+  errno: 30  # EROFS - Read-only file system
+  percent: 100
+  methods:
+    - write
+  duration: "3m"
+
+---
+# Disk full simulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: disk-full
+  namespace: chaos-testing
+spec:
+  action: errno
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: tenant-management
+  volumePath: /var/log
+  path: /var/log/**/*
+  errno: 28  # ENOSPC - No space left on device
+  percent: 100
+  methods:
+    - write
+  duration: "2m"
+
+---
+# Mixed I/O chaos - delay and errors
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: mixed-io-chaos
+  namespace: chaos-testing
+spec:
+  action: mixed
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+  volumePath: /app/data
+  path: /app/data/**/*
+  delay: "100ms"
+  errno: 5
+  percent: 50
+  duration: "5m"
+
+---
+# File attribute manipulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: file-attr-chaos
+  namespace: chaos-testing
+spec:
+  action: attrOverride
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+  volumePath: /etc/config
+  path: /etc/config/*.yaml
+  attr:
+    perm: 0444  # Read-only
+  duration: "2m"
+
+---
+# Database I/O latency
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: db-io-latency
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: postgres
+  volumePath: /var/lib/postgresql/data
+  path: /var/lib/postgresql/data/pg_wal/*
+  delay: "500ms"
+  percent: 100
+  duration: "3m"
+
+---
+# Scheduled I/O chaos - recurring pattern
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: scheduled-io-chaos
+  namespace: chaos-testing
+spec:
+  schedule: "@every 3h"
+  type: IOChaos
+  historyLimit: 5
+  ioChaos:
+    action: delay
+    mode: one
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        tier: backend
+    volumePath: /app
+    path: /app/**/*
+    delay: "150ms"
+    percent: 50
+    duration: "4m"
+
+---
+# Corruption simulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: data-corruption
+  namespace: chaos-testing
+spec:
+  action: mistake
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+  volumePath: /var/lib/data
+  path: /var/lib/data/**/*.db
+  mistake:
+    filling: random
+    maxOccurrences: 10
+    maxLength: 100
+  percent: 5
+  duration: "1m"

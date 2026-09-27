@@ -1,0 +1,59 @@
+---
+# SSD Storage Class for production workloads
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ssd-storage
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3  # AWS EBS gp3
+  iops: "3000"
+  throughput: "125"
+  encrypted: "true"
+  fsType: ext4
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+---
+# HDD Storage Class for backups and archives
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hdd-storage
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: st1  # AWS EBS Throughput Optimized HDD
+  encrypted: "true"
+  fsType: ext4
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+---
+# Multi-cloud StorageClass alternatives (commented)
+# For GCP:
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: ssd-storage-gcp
+# provisioner: kubernetes.io/gce-pd
+# parameters:
+#   type: pd-ssd
+#   replication-type: regional-pd
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true
+# reclaimPolicy: Retain
+
+# For Azure:
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: ssd-storage-azure
+# provisioner: kubernetes.io/azure-disk
+# parameters:
+#   storageaccounttype: Premium_LRS
+#   kind: Managed
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true
+# reclaimPolicy: Retain

@@ -1,0 +1,46 @@
+"""
+Custom scalar types
+"""
+
+"""
+ISO 8601 date-time string
+Example: "2024-11-19T10:30:00Z"
+"""
+scalar DateTime
+
+"""
+JSON object
+"""
+scalar JSON
+
+"""
+JSON object (alias for JSON)
+"""
+scalar JSONObject
+
+"""
+URL string
+Must be a valid HTTP or HTTPS URL
+"""
+scalar URL
+
+"""
+Email address string
+Must be a valid email format
+"""
+scalar EmailAddress
+
+"""
+Positive integer (greater than 0)
+"""
+scalar PositiveInt
+
+"""
+Non-negative integer (0 or greater)
+"""
+scalar NonNegativeInt
+
+"""
+Non-negative float (0.0 or greater)
+"""
+scalar NonNegativeFloat

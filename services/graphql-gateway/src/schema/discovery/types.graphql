@@ -1,0 +1,154 @@
+"""
+Search filter input
+"""
+input SearchFilter {
+  """
+  Filter by category
+  """
+  category: String
+
+  """
+  Filter by tags
+  """
+  tags: [String!]
+
+  """
+  Minimum rating
+  """
+  minRating: NonNegativeFloat
+
+  """
+  Pricing model filter
+  """
+  pricingModel: PricingModel
+
+  """
+  Maximum price
+  """
+  maxPrice: NonNegativeFloat
+}
+
+"""
+Search result
+"""
+type SearchResult {
+  """
+  Matching services
+  """
+  services: [Service!]!
+
+  """
+  Total number of results
+  """
+  total: Int!
+
+  """
+  Search took (milliseconds)
+  """
+  took: Int!
+
+  """
+  Facets for filtering
+  """
+  facets: SearchFacets
+
+  """
+  Pagination info
+  """
+  pageInfo: PageInfo
+}
+
+"""
+Search facets
+"""
+type SearchFacets {
+  """
+  Category facets
+  """
+  categories: [FacetValue!]!
+
+  """
+  Tag facets
+  """
+  tags: [FacetValue!]!
+
+  """
+  Pricing model facets
+  """
+  pricingModels: [FacetValue!]!
+}
+
+"""
+Facet value
+"""
+type FacetValue {
+  """
+  Facet value
+  """
+  value: String!
+
+  """
+  Count of matching items
+  """
+  count: Int!
+}
+
+"""
+Category
+"""
+type Category {
+  """
+  Category ID
+  """
+  id: ID!
+
+  """
+  Category name
+  """
+  name: String!
+
+  """
+  Category description
+  """
+  description: String
+
+  """
+  Number of services in category
+  """
+  serviceCount: Int!
+
+  """
+  Icon URL
+  """
+  iconUrl: URL
+
+  """
+  Parent category ID
+  """
+  parentId: ID
+
+  """
+  Subcategories
+  """
+  subcategories: [Category!]
+}
+
+"""
+Tag
+"""
+type Tag {
+  """
+  Tag name
+  """
+  name: String!
+
+  """
+  Number of services with this tag
+  """
+  count: Int!
+
+  """
+  Trending score
+  """
+  trendingScore: NonNegativeFloat
+}

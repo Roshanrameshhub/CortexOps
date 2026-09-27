@@ -1,0 +1,65 @@
+[package]
+name = "llm-infra"
+version = "0.1.0"
+edition = "2021"
+authors = ["LLM-Dev-Ops Team"]
+description = "Shared infrastructure utilities for LLM-Dev-Ops ecosystem - configuration, logging, tracing, caching, retry, rate-limiting, and error handling"
+license = "MIT"
+repository = "https://github.com/roshanrameshhub/inferops"
+keywords = ["llm", "infrastructure", "logging", "tracing", "config"]
+categories = ["development-tools", "web-programming"]
+
+[features]
+default = ["config", "logging", "errors"]
+full = ["config", "logging", "tracing", "cache", "retry", "rate-limit", "errors"]
+config = ["dep:config", "dep:dotenvy"]
+logging = ["dep:tracing", "dep:tracing-subscriber"]
+tracing = ["dep:opentelemetry", "dep:opentelemetry-jaeger", "dep:tracing-opentelemetry"]
+cache = ["dep:redis"]
+retry = []
+rate-limit = ["cache"]
+errors = []
+
+[dependencies]
+# Core
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Configuration (optional)
+config = { version = "0.14", optional = true }
+dotenvy = { version = "0.15", optional = true }
+
+# Logging (optional)
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+
+# Distributed tracing (optional)
+opentelemetry = { version = "0.22", features = ["trace"], optional = true }
+opentelemetry-jaeger = { version = "0.21", optional = true }
+tracing-opentelemetry = { version = "0.23", optional = true }
+
+# Cache (optional)
+redis = { version = "0.25", features = ["tokio-comp", "connection-manager"], optional = true }
+
+# Async runtime
+tokio = { version = "1.35", features = ["rt", "time", "sync"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# URL parsing
+url = "2.5"
+
+[dev-dependencies]
+tokio = { version = "1.35", features = ["full", "test-util"] }
+mockall = "0.12"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+required-features = ["full"]

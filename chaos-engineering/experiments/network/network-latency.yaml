@@ -1,0 +1,126 @@
+# Network Latency Chaos Experiment
+# Injects network latency to test system behavior under slow network conditions
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: graphql-network-latency
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: network
+    severity: medium
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: graphql-gateway
+  delay:
+    latency: "500ms"
+    correlation: "80"
+    jitter: "100ms"
+  direction: to
+  target:
+    mode: one
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        app: postgres
+  duration: "5m"
+  scheduler:
+    cron: "@every 2h"
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: ml-recommendations-latency
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: fixed-percent
+  value: "50"  # Affect 50% of pods
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: ml-recommendations
+  delay:
+    latency: "300ms"
+    correlation: "90"
+    jitter: "50ms"
+  duration: "10m"
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: redis-high-latency
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: redis
+  delay:
+    latency: "200ms"
+    correlation: "95"
+    jitter: "20ms"
+  duration: "3m"
+
+---
+# Graduated latency experiment - increasing latency over time
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: graduated-latency
+  namespace: chaos-testing
+spec:
+  schedule: "@every 30m"
+  type: NetworkChaos
+  networkChaos:
+    action: delay
+    mode: one
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        tier: backend
+    delay:
+      latency: "100ms"  # Start with 100ms
+      correlation: "80"
+    duration: "2m"
+
+---
+# Cross-region latency simulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: cross-region-latency
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      region: us-east-1
+  delay:
+    latency: "150ms"  # Simulate cross-region latency
+    correlation: "100"
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        region: eu-west-1
+  duration: "15m"

@@ -1,0 +1,191 @@
+# Deprecation Agent Platform Registration
+# Classification: LIFECYCLE MANAGEMENT
+
+agent:
+  id: deprecation-agent
+  displayName: Deprecation Agent
+  version: "1.0.0"
+  classification: LIFECYCLE_MANAGEMENT
+  description: Manage controlled deprecation and retirement of marketplace assets
+
+  # Decision type produced by this agent
+  decisionType: marketplace_deprecation
+
+  # Agent capabilities
+  capabilities:
+    - deprecate_asset
+    - retire_asset
+    - assess_consumer_impact
+    - enforce_visibility_constraints
+    - enforce_version_constraints
+    - emit_lifecycle_signals
+    - notify_consumers
+
+  # Endpoint configuration
+  endpoint:
+    url: https://marketplace-agents.run.app/deprecation
+    method: POST
+    timeoutMs: 30000
+    retry:
+      maxAttempts: 3
+      backoffMs: 1000
+      exponential: true
+
+  # Health check
+  healthCheck:
+    endpoint: https://marketplace-agents.run.app/deprecation/health
+    intervalSeconds: 30
+    timeoutSeconds: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+
+  # CLI commands exposed
+  cli:
+    commands:
+      - name: deprecate
+        description: Mark an asset as deprecated
+        usage: deprecation-agent deprecate -a <asset-id> -t <type> -r <reason> -d <description>
+        options:
+          - flag: -a, --asset-id
+            description: Asset UUID
+            required: true
+          - flag: -t, --asset-type
+            description: Asset type
+            required: true
+          - flag: -r, --reason
+            description: Deprecation reason
+            required: true
+          - flag: -d, --description
+            description: Detailed reason description
+            required: true
+          - flag: -s, --sunset-date
+            description: Sunset date (ISO 8601)
+            required: false
+          - flag: -i, --immediate
+            description: Apply immediately
+            required: false
+          - flag: -f, --force
+            description: Force deprecation
+            required: false
+          - flag: --dry-run
+            description: Dry run mode
+            required: false
+
+      - name: retire
+        description: Mark an asset as retired
+        usage: deprecation-agent retire -a <asset-id> -t <type> -r <reason> -d <description>
+
+      - name: inspect
+        description: Get deprecation status of an asset
+        usage: deprecation-agent inspect -a <asset-id>
+
+      - name: impact
+        description: Assess consumer impact
+        usage: deprecation-agent impact -a <asset-id>
+
+      - name: list-deprecated
+        description: List deprecated assets
+        usage: deprecation-agent list-deprecated [-t <type>] [-l <limit>]
+
+  # Schema references
+  schemas:
+    input: "@llm-marketplace/agentics-contracts/schemas#DeprecationAgentInput"
+    output: "@llm-marketplace/agentics-contracts/schemas#DeprecationAgentOutput"
+    decisionEvent: "@llm-marketplace/agentics-contracts/schemas#DecisionEvent"
+
+  # Systems that may consume this agent's output
+  consumers:
+    - name: LLM-Governance-Dashboard
+      description: Consumes deprecation audit data
+      integrationPoint: audit-feed
+
+    - name: LLM-Policy-Engine
+      description: References marketplace lifecycle state
+      integrationPoint: lifecycle-state-api
+
+    - name: LLM-Registry
+      description: Receives lifecycle state updates
+      integrationPoint: registry-sync
+
+    - name: Publishing Service
+      description: Updates service status
+      integrationPoint: status-update-api
+
+  # Explicit non-responsibilities (CRITICAL)
+  mustNot:
+    - Execute workflows
+    - Modify runtime behavior
+    - Enforce policies or approvals
+    - Trigger external workflows
+    - Execute other agents
+    - Apply optimizations
+    - Emit anomaly detections
+    - Connect directly to SQL
+
+  # Resource limits
+  resources:
+    memory: 512Mi
+    cpu: "1"
+    minInstances: 0
+    maxInstances: 10
+    concurrency: 80
+    timeoutSeconds: 60
+
+  # Monitoring
+  monitoring:
+    metrics:
+      - name: deprecation_requests_total
+        type: counter
+        description: Total deprecation requests
+
+      - name: deprecation_success_total
+        type: counter
+        description: Successful deprecation operations
+
+      - name: deprecation_failure_total
+        type: counter
+        description: Failed deprecation operations
+
+      - name: deprecation_duration_seconds
+        type: histogram
+        description: Deprecation operation duration
+        buckets: [0.1, 0.5, 1, 2, 5, 10, 30]
+
+      - name: consumer_impact_score
+        type: gauge
+        description: Consumer impact score of last deprecation
+
+    alerts:
+      - name: DeprecationAgentHighErrorRate
+        condition: rate(deprecation_failure_total[5m]) / rate(deprecation_requests_total[5m]) > 0.1
+        severity: warning
+        description: Deprecation agent error rate above 10%
+
+      - name: DeprecationAgentDown
+        condition: up{job="deprecation-agent"} == 0
+        severity: critical
+        description: Deprecation agent is down
+
+  # Tags for discovery
+  tags:
+    - lifecycle
+    - deprecation
+    - retirement
+    - asset-management
+    - marketplace
+
+  # Owner
+  owner: marketplace-team
+
+  # Documentation
+  documentation:
+    readme: /docs/agents/deprecation-agent.md
+    api: /docs/api/deprecation-agent-api.md
+    runbook: /docs/runbooks/deprecation-agent-runbook.md
+
+  # Enabled status
+  enabled: true
+
+  # Registration metadata
+  registeredAt: "2024-01-01T00:00:00Z"
+  updatedAt: "2024-01-01T00:00:00Z"

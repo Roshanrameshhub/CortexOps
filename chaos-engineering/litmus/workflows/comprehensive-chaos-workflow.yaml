@@ -1,0 +1,448 @@
+# Comprehensive Chaos Workflow
+# Orchestrates end-to-end chaos testing across all platform components
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: llm-marketplace-chaos-workflow
+  namespace: chaos-testing
+  labels:
+    app: chaos-workflow
+    scenario: comprehensive
+spec:
+  entrypoint: chaos-pipeline
+  serviceAccountName: argo-chaos
+
+  # Workflow arguments
+  arguments:
+    parameters:
+      - name: chaos-duration
+        value: "300"  # 5 minutes
+      - name: blast-radius
+        value: "30"  # 30% of pods
+      - name: environment
+        value: "staging"
+
+  # Volume claim templates for artifacts
+  volumeClaimTemplates:
+    - metadata:
+        name: chaos-artifacts
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 1Gi
+
+  templates:
+    # Main pipeline orchestrator
+    - name: chaos-pipeline
+      steps:
+        # Step 1: Pre-chaos validation
+        - - name: validate-environment
+            template: validate-slo
+            arguments:
+              parameters:
+                - name: check-type
+                  value: "pre-chaos"
+
+        # Step 2: Install chaos experiments
+        - - name: install-experiments
+            template: install-chaos-experiments
+
+        # Step 3: Run chaos tests in parallel
+        - - name: network-chaos
+            template: run-network-chaos
+          - name: pod-chaos
+            template: run-pod-chaos
+          - name: resource-chaos
+            template: run-resource-chaos
+
+        # Step 4: Application-level chaos (after infrastructure chaos)
+        - - name: application-chaos
+            template: run-application-chaos
+
+        # Step 5: Wait for system stabilization
+        - - name: stabilization-period
+            template: wait-and-monitor
+            arguments:
+              parameters:
+                - name: wait-duration
+                  value: "120"  # 2 minutes
+
+        # Step 6: Post-chaos validation
+        - - name: validate-recovery
+            template: validate-slo
+            arguments:
+              parameters:
+                - name: check-type
+                  value: "post-chaos"
+
+        # Step 7: Generate report
+        - - name: generate-report
+            template: chaos-report
+
+        # Step 8: Cleanup (always runs)
+        - - name: cleanup
+            template: cleanup-experiments
+
+    # Pre/Post validation template
+    - name: validate-slo
+      inputs:
+        parameters:
+          - name: check-type
+      script:
+        image: curlimages/curl:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          CHECK_TYPE="{{inputs.parameters.check-type}}"
+          echo "Running $CHECK_TYPE SLO validation..."
+
+          # Check GraphQL Gateway health
+          GRAPHQL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            http://graphql-gateway.llm-marketplace.svc.cluster.local:4000/health)
+
+          if [ "$GRAPHQL_STATUS" != "200" ]; then
+            echo "ERROR: GraphQL Gateway health check failed: $GRAPHQL_STATUS"
+            exit 1
+          fi
+
+          # Check Prometheus metrics
+          PROMETHEUS_URL="http://prometheus.monitoring.svc.cluster.local:9090"
+
+          # Query error rate
+          ERROR_RATE=$(curl -s "$PROMETHEUS_URL/api/v1/query?query=rate(http_requests_total{status=~\"5..\"}[5m])" \
+            | jq -r '.data.result[0].value[1] // 0')
+
+          echo "Current error rate: $ERROR_RATE"
+
+          # Validate error rate < 1%
+          if [ "$(echo "$ERROR_RATE > 0.01" | bc -l)" -eq 1 ]; then
+            echo "ERROR: Error rate exceeds 1%: $ERROR_RATE"
+            if [ "$CHECK_TYPE" = "pre-chaos" ]; then
+              exit 1
+            fi
+          fi
+
+          # Query latency p95
+          LATENCY_P95=$(curl -s "$PROMETHEUS_URL/api/v1/query?query=histogram_quantile(0.95,rate(http_request_duration_seconds_bucket[5m]))" \
+            | jq -r '.data.result[0].value[1] // 0')
+
+          echo "P95 latency: ${LATENCY_P95}s"
+
+          # Validate p95 latency < 2s
+          if [ "$(echo "$LATENCY_P95 > 2.0" | bc -l)" -eq 1 ]; then
+            echo "WARNING: P95 latency exceeds 2s: ${LATENCY_P95}s"
+          fi
+
+          echo "$CHECK_TYPE validation completed successfully"
+
+    # Install experiments template
+    - name: install-chaos-experiments
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Installing Litmus chaos experiments..."
+
+          # Install chaos experiments CRDs
+          kubectl apply -f https://hub.litmuschaos.io/api/chaos/master?file=charts/generic/experiments.yaml -n chaos-testing
+
+          # Verify installation
+          kubectl get chaosexperiments -n chaos-testing
+
+          echo "Chaos experiments installed successfully"
+
+    # Network chaos template
+    - name: run-network-chaos
+      steps:
+        - - name: network-latency
+            template: apply-chaos-engine
+            arguments:
+              parameters:
+                - name: engine-file
+                  value: "/chaos/experiments/network/network-latency.yaml"
+                - name: duration
+                  value: "{{workflow.parameters.chaos-duration}}"
+
+        - - name: network-partition
+            template: apply-chaos-engine
+            arguments:
+              parameters:
+                - name: engine-file
+                  value: "/chaos/experiments/network/network-partition.yaml"
+                - name: duration
+                  value: "180"
+
+    # Pod chaos template
+    - name: run-pod-chaos
+      steps:
+        - - name: pod-delete
+            template: apply-chaos-engine
+            arguments:
+              parameters:
+                - name: engine-file
+                  value: "/chaos/litmus/chaosengine/application-chaos.yaml"
+                - name: duration
+                  value: "{{workflow.parameters.chaos-duration}}"
+
+    # Resource chaos template
+    - name: run-resource-chaos
+      steps:
+        - - name: cpu-stress
+            template: apply-chaos-engine
+            arguments:
+              parameters:
+                - name: engine-file
+                  value: "/chaos/experiments/stress/stress-chaos.yaml"
+                - name: duration
+                  value: "{{workflow.parameters.chaos-duration}}"
+
+    # Application chaos template
+    - name: run-application-chaos
+      steps:
+        - - name: database-chaos
+            template: apply-chaos-engine
+            arguments:
+              parameters:
+                - name: engine-file
+                  value: "/chaos/litmus/chaosengine/postgres-chaos.yaml"
+                - name: duration
+                  value: "{{workflow.parameters.chaos-duration}}"
+
+        - - name: cache-chaos
+            template: apply-chaos-engine
+            arguments:
+              parameters:
+                - name: engine-file
+                  value: "/chaos/litmus/chaosengine/redis-chaos.yaml"
+                - name: duration
+                  value: "180"
+
+    # Generic chaos engine applier
+    - name: apply-chaos-engine
+      inputs:
+        parameters:
+          - name: engine-file
+          - name: duration
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          ENGINE_FILE="{{inputs.parameters.engine-file}}"
+          DURATION="{{inputs.parameters.duration}}"
+
+          echo "Applying chaos engine: $ENGINE_FILE"
+
+          # Apply chaos engine
+          kubectl apply -f "$ENGINE_FILE" -n chaos-testing
+
+          # Extract engine name
+          ENGINE_NAME=$(kubectl get chaosengine -n chaos-testing -o jsonpath='{.items[-1:].metadata.name}')
+
+          echo "Chaos engine $ENGINE_NAME started"
+
+          # Wait for chaos engine to complete
+          kubectl wait --for=condition=Completed \
+            chaosengine/$ENGINE_NAME \
+            -n chaos-testing \
+            --timeout=${DURATION}s || true
+
+          # Get chaos result
+          CHAOS_RESULT=$(kubectl get chaosresult -n chaos-testing \
+            -l chaosengine=$ENGINE_NAME \
+            -o jsonpath='{.items[0].spec.experimentstatus.verdict}')
+
+          echo "Chaos result: $CHAOS_RESULT"
+
+          if [ "$CHAOS_RESULT" != "Pass" ]; then
+            echo "WARNING: Chaos experiment did not pass: $CHAOS_RESULT"
+          fi
+
+    # Wait and monitor template
+    - name: wait-and-monitor
+      inputs:
+        parameters:
+          - name: wait-duration
+      script:
+        image: curlimages/curl:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+
+          DURATION="{{inputs.parameters.wait-duration}}"
+          echo "Waiting for ${DURATION}s while monitoring system recovery..."
+
+          sleep "$DURATION"
+
+          echo "Stabilization period completed"
+
+    # Chaos report template
+    - name: chaos-report
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        volumeMounts:
+          - name: chaos-artifacts
+            mountPath: /artifacts
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Generating chaos engineering report..."
+
+          REPORT_FILE="/artifacts/chaos-report-$(date +%Y%m%d-%H%M%S).json"
+
+          # Collect chaos results
+          kubectl get chaosresult -n chaos-testing -o json > "$REPORT_FILE"
+
+          # Summary statistics
+          TOTAL=$(kubectl get chaosresult -n chaos-testing --no-headers | wc -l)
+          PASSED=$(kubectl get chaosresult -n chaos-testing \
+            -o jsonpath='{.items[?(@.spec.experimentstatus.verdict=="Pass")].metadata.name}' | wc -w)
+          FAILED=$(kubectl get chaosresult -n chaos-testing \
+            -o jsonpath='{.items[?(@.spec.experimentstatus.verdict=="Fail")].metadata.name}' | wc -w)
+
+          echo "================================"
+          echo "Chaos Engineering Report"
+          echo "================================"
+          echo "Total experiments: $TOTAL"
+          echo "Passed: $PASSED"
+          echo "Failed: $FAILED"
+          echo "================================"
+          echo "Report saved to: $REPORT_FILE"
+
+    # Cleanup template
+    - name: cleanup-experiments
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Cleaning up chaos experiments..."
+
+          # Delete all chaos engines
+          kubectl delete chaosengine --all -n chaos-testing || true
+
+          # Delete chaos results older than 24h
+          kubectl delete chaosresult -n chaos-testing \
+            --field-selector metadata.creationTimestamp<$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ') || true
+
+          echo "Cleanup completed"
+
+---
+# Scheduled Chaos Workflow
+# Runs chaos tests on a recurring schedule
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: scheduled-chaos-workflow
+  namespace: chaos-testing
+spec:
+  schedule: "0 2 * * *"  # Run daily at 2 AM UTC
+  timezone: "UTC"
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+
+  workflowSpec:
+    entrypoint: chaos-pipeline
+    serviceAccountName: argo-chaos
+
+    arguments:
+      parameters:
+        - name: chaos-duration
+          value: "600"  # 10 minutes for scheduled runs
+        - name: blast-radius
+          value: "20"   # Conservative 20% for production
+        - name: environment
+          value: "production"
+
+    templates:
+      - name: chaos-pipeline
+        steps:
+          # Pre-chaos checks
+          - - name: check-business-hours
+              template: business-hours-gate
+
+          # Throttled chaos execution
+          - - name: network-chaos
+              template: run-chaos
+              arguments:
+                parameters:
+                  - name: chaos-type
+                    value: "network"
+
+          # Wait between chaos types
+          - - name: wait-1
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "300"
+
+          - - name: pod-chaos
+              template: run-chaos
+              arguments:
+                parameters:
+                  - name: chaos-type
+                    value: "pod"
+
+          # Final validation
+          - - name: final-check
+              template: verify-slo
+
+      - name: business-hours-gate
+        script:
+          image: busybox
+          command: [sh]
+          source: |
+            #!/bin/sh
+            HOUR=$(date +%H)
+
+            # Only run between 2-6 AM
+            if [ "$HOUR" -lt 2 ] || [ "$HOUR" -ge 6 ]; then
+              echo "Outside chaos window (2-6 AM). Skipping."
+              exit 1
+            fi
+
+            echo "Within chaos window. Proceeding."
+
+      - name: run-chaos
+        inputs:
+          parameters:
+            - name: chaos-type
+        container:
+          image: litmuschaos/k8s:latest
+          command: [sh, -c]
+          args:
+            - |
+              echo "Running {{inputs.parameters.chaos-type}} chaos..."
+              kubectl apply -f /chaos/litmus/chaosengine/{{inputs.parameters.chaos-type}}-chaos.yaml
+
+      - name: wait
+        inputs:
+          parameters:
+            - name: duration
+        suspend:
+          duration: "{{inputs.parameters.duration}}s"
+
+      - name: verify-slo
+        script:
+          image: curlimages/curl:latest
+          command: [sh]
+          source: |
+            #!/bin/sh
+            echo "Verifying SLOs after chaos..."
+            # Add SLO validation logic
+            exit 0

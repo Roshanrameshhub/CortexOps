@@ -1,0 +1,180 @@
+# Redis Chaos Engine
+# Tests cache layer resilience and failover mechanisms
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: redis-chaos-engine
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: cache
+    severity: high
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=redis'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Redis master pod kill
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            - name: CHAOS_INTERVAL
+              value: '20'
+
+            - name: FORCE
+              value: 'true'
+
+            # Target master pod
+            - name: TARGET_POD
+              value: 'redis-master-0'
+
+    # Redis network latency
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+            - name: NETWORK_LATENCY
+              value: '500'  # 500ms
+
+            - name: JITTER
+              value: '100'
+
+            - name: PODS_AFFECTED_PERC
+              value: '100'  # All redis pods
+
+    # Redis network loss
+    - name: pod-network-loss
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: NETWORK_PACKET_LOSS_PERCENTAGE
+              value: '30'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+---
+# Redis Sentinel Chaos
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: redis-sentinel-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=redis-sentinel'
+    appkind: 'deployment'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Sentinel pod failures
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            - name: CHAOS_INTERVAL
+              value: '15'
+
+            - name: FORCE
+              value: 'false'
+
+            - name: PODS_AFFECTED_PERC
+              value: '33'  # Kill 1 of 3 sentinels
+
+---
+# Redis Memory Pressure
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: redis-memory-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=redis'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    - name: pod-memory-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            # Consume 512MB
+            - name: MEMORY_CONSUMPTION
+              value: '512'
+
+            - name: NUMBER_OF_WORKERS
+              value: '2'
+
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+
+---
+# Redis Cluster Split-Brain
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: redis-split-brain-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=redis'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Partition master from replicas
+    - name: pod-network-partition
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '90'
+
+            - name: DESTINATION_IPS
+              value: 'redis-replica-0.redis.llm-marketplace.svc.cluster.local,redis-replica-1.redis.llm-marketplace.svc.cluster.local'
+
+            - name: TARGET_POD
+              value: 'redis-master-0'

@@ -1,0 +1,2 @@
+# This directory contains raw benchmark results in JSON format
+# Files are auto-generated with format: {target_id}_{timestamp}.json

@@ -1,0 +1,290 @@
+# LLM-Marketplace CLI Commands Configuration
+# Integration with agentics-cli
+#
+# Usage: agentics marketplace <command> [options]
+
+name: marketplace
+description: LLM Marketplace - Asset packaging, distribution, and lifecycle management
+version: 1.0.0
+
+# Service endpoint (resolved dynamically based on environment)
+endpoints:
+  dev: https://llm-marketplace-dev.run.app
+  staging: https://llm-marketplace-staging.run.app
+  prod: https://llm-marketplace.run.app
+
+# Commands mapping to agent endpoints
+commands:
+  # =============================================================================
+  # PACKAGING AGENT COMMANDS
+  # =============================================================================
+  package:
+    description: Package assets for marketplace distribution
+    endpoint: /package
+    method: POST
+    timeout: 300000
+    options:
+      - name: assets
+        type: array
+        required: true
+        description: Asset references to package (registry_id:version)
+      - name: name
+        type: string
+        required: true
+        description: Package name
+      - name: version
+        type: string
+        required: true
+        description: Package version (semver)
+      - name: visibility
+        type: string
+        default: internal
+        choices: [public, private, internal, restricted]
+        description: Package visibility scope
+      - name: description
+        type: string
+        description: Package description
+      - name: author
+        type: string
+        description: Package author
+      - name: validation-level
+        type: string
+        default: standard
+        choices: [strict, standard, permissive]
+        description: Validation strictness
+      - name: include-sources
+        type: boolean
+        default: false
+        description: Include source files in package
+      - name: dry-run
+        type: boolean
+        default: false
+        description: Validate without persisting
+      - name: json
+        type: boolean
+        default: false
+        description: Output as JSON
+    examples:
+      - command: agentics marketplace package --assets agent-1:1.0.0,agent-2:2.0.0 --name my-bundle --version 1.0.0
+        description: Package two agents into a bundle
+      - command: agentics marketplace package --assets template-auth:1.0.0 --name auth-starter --version 1.0.0 --visibility public
+        description: Create a public starter template
+
+  # =============================================================================
+  # DEPRECATION AGENT COMMANDS
+  # =============================================================================
+  deprecate:
+    description: Mark an asset as deprecated with sunset date
+    endpoint: /deprecation
+    method: POST
+    timeout: 30000
+    options:
+      - name: asset-id
+        type: string
+        required: true
+        description: Asset ID to deprecate (UUID)
+      - name: asset-type
+        type: string
+        required: true
+        choices: [service, agent, template, workflow, bundle, plugin]
+        description: Type of asset
+      - name: reason
+        type: string
+        required: true
+        choices: [superseded, security, obsolete, consolidation, compliance, end_of_life, other]
+        description: Deprecation reason
+      - name: description
+        type: string
+        description: Detailed reason description
+      - name: sunset-date
+        type: string
+        description: Sunset date (ISO 8601, e.g., 2025-06-01)
+      - name: replacement-id
+        type: string
+        description: Replacement asset ID
+      - name: migration-guide
+        type: string
+        description: URL to migration guide
+      - name: immediate
+        type: boolean
+        default: false
+        description: Apply immediately (no grace period)
+      - name: force
+        type: boolean
+        default: false
+        description: Force deprecation (skip consumer impact check)
+      - name: no-notify
+        type: boolean
+        default: false
+        description: Skip consumer notifications
+      - name: dry-run
+        type: boolean
+        default: false
+        description: Preview without applying
+      - name: json
+        type: boolean
+        default: false
+        description: Output as JSON
+    examples:
+      - command: agentics marketplace deprecate --asset-id abc123 --asset-type agent --reason superseded --replacement-id def456
+        description: Deprecate agent with replacement
+      - command: agentics marketplace deprecate --asset-id xyz789 --asset-type template --reason end_of_life --sunset-date 2025-06-01
+        description: Deprecate template with sunset date
+
+  retire:
+    description: Immediately retire an asset (removes from marketplace)
+    endpoint: /deprecation
+    method: POST
+    timeout: 30000
+    options:
+      - name: asset-id
+        type: string
+        required: true
+        description: Asset ID to retire (UUID)
+      - name: asset-type
+        type: string
+        required: true
+        choices: [service, agent, template, workflow, bundle, plugin]
+        description: Type of asset
+      - name: reason
+        type: string
+        required: true
+        choices: [security, obsolete, compliance, end_of_life, other]
+        description: Retirement reason
+      - name: description
+        type: string
+        description: Detailed reason description
+      - name: force
+        type: boolean
+        default: false
+        description: Force retirement (even with active consumers)
+      - name: json
+        type: boolean
+        default: false
+        description: Output as JSON
+    transform:
+      targetState: retired
+      immediateEffect: true
+    examples:
+      - command: agentics marketplace retire --asset-id abc123 --asset-type agent --reason security
+        description: Emergency retire due to security issue
+
+  inspect:
+    description: Get deprecation status and lifecycle history
+    endpoint: /deprecation
+    method: POST
+    timeout: 10000
+    options:
+      - name: asset-id
+        type: string
+        required: true
+        description: Asset ID to inspect
+      - name: include-history
+        type: boolean
+        default: true
+        description: Include full lifecycle history
+      - name: include-impact
+        type: boolean
+        default: false
+        description: Include consumer impact analysis
+      - name: json
+        type: boolean
+        default: false
+        description: Output as JSON
+    transform:
+      operation: inspect
+    examples:
+      - command: agentics marketplace inspect --asset-id abc123
+        description: View deprecation status
+      - command: agentics marketplace inspect --asset-id abc123 --include-impact
+        description: View status with consumer impact
+
+  impact:
+    description: Assess consumer impact before deprecation
+    endpoint: /deprecation
+    method: POST
+    timeout: 30000
+    options:
+      - name: asset-id
+        type: string
+        required: true
+        description: Asset ID to analyze
+      - name: asset-type
+        type: string
+        required: true
+        choices: [service, agent, template, workflow, bundle, plugin]
+        description: Type of asset
+      - name: json
+        type: boolean
+        default: false
+        description: Output as JSON
+    transform:
+      operation: impact_assessment
+    examples:
+      - command: agentics marketplace impact --asset-id abc123 --asset-type agent
+        description: Analyze impact of deprecating an agent
+
+  list-deprecated:
+    description: List all deprecated assets
+    endpoint: /deprecation
+    method: POST
+    timeout: 10000
+    options:
+      - name: state
+        type: string
+        default: deprecated
+        choices: [deprecated, retired, all]
+        description: Filter by lifecycle state
+      - name: asset-type
+        type: string
+        choices: [service, agent, template, workflow, bundle, plugin]
+        description: Filter by asset type
+      - name: limit
+        type: number
+        default: 50
+        description: Maximum results
+      - name: json
+        type: boolean
+        default: false
+        description: Output as JSON
+    transform:
+      operation: list_deprecated
+    examples:
+      - command: agentics marketplace list-deprecated --state deprecated
+        description: List all deprecated assets
+      - command: agentics marketplace list-deprecated --asset-type agent --state retired
+        description: List retired agents
+
+# CLI output formatting
+output:
+  success:
+    format: |
+      ✅ {message}
+
+      Asset: {assetId}
+      Type: {assetType}
+      State: {newState}
+      {additionalInfo}
+  error:
+    format: |
+      ❌ {message}
+
+      Error Code: {code}
+      Details: {details}
+  table:
+    columns:
+      - name: Asset ID
+        key: assetId
+        width: 36
+      - name: Type
+        key: assetType
+        width: 12
+      - name: State
+        key: state
+        width: 12
+      - name: Sunset Date
+        key: sunsetDate
+        width: 12
+      - name: Reason
+        key: reason
+        width: 20

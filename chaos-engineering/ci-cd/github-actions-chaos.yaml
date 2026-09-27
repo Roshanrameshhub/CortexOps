@@ -1,0 +1,487 @@
+# GitHub Actions Workflow for Chaos Engineering
+# Integrates automated chaos testing into CI/CD pipeline
+name: Chaos Engineering Tests
+
+on:
+  # Run on schedule (daily chaos tests in staging)
+  schedule:
+    - cron: '0 2 * * *'  # 2 AM UTC daily
+
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      scenario:
+        description: 'Chaos scenario to run'
+        required: true
+        type: choice
+        options:
+          - network-latency
+          - pod-failure
+          - resource-stress
+          - database-chaos
+          - cache-chaos
+          - comprehensive
+      blast-radius:
+        description: 'Blast radius percentage (1-100)'
+        required: false
+        default: '30'
+      duration:
+        description: 'Chaos duration in seconds'
+        required: false
+        default: '300'
+
+  # Run on PR to staging
+  pull_request:
+    branches:
+      - staging
+    paths:
+      - 'services/**'
+      - 'infrastructure/**'
+      - '.github/workflows/chaos-*.yaml'
+
+env:
+  KUBECONFIG: ${{ secrets.KUBECONFIG }}
+  SLACK_WEBHOOK: ${{ secrets.SLACK_CHAOS_WEBHOOK }}
+
+jobs:
+  # Pre-chaos validation
+  pre-chaos-validation:
+    name: Pre-Chaos Validation
+    runs-on: ubuntu-latest
+    outputs:
+      baseline-error-rate: ${{ steps.metrics.outputs.error_rate }}
+      baseline-latency: ${{ steps.metrics.outputs.latency_p95 }}
+      can-proceed: ${{ steps.validation.outputs.can_proceed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.27.0'
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Verify cluster connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Check for active incidents
+        id: incidents
+        run: |
+          # Query Prometheus for active critical alerts
+          CRITICAL_ALERTS=$(kubectl exec -n monitoring prometheus-0 -- \
+            promtool query instant http://localhost:9090 \
+            'ALERTS{severity="critical"}' | jq '.data.result | length')
+
+          echo "critical_alerts=$CRITICAL_ALERTS" >> $GITHUB_OUTPUT
+
+          if [ "$CRITICAL_ALERTS" -gt 0 ]; then
+            echo "❌ Cannot run chaos: $CRITICAL_ALERTS critical alerts active"
+            exit 1
+          fi
+
+      - name: Collect baseline metrics
+        id: metrics
+        run: |
+          # Error rate
+          ERROR_RATE=$(kubectl exec -n monitoring prometheus-0 -- \
+            promtool query instant http://localhost:9090 \
+            'sum(rate(http_requests_total{status=~"5.."}[5m]))/sum(rate(http_requests_total[5m]))' \
+            | jq -r '.data.result[0].value[1] // "0"')
+
+          # P95 latency
+          LATENCY_P95=$(kubectl exec -n monitoring prometheus-0 -- \
+            promtool query instant http://localhost:9090 \
+            'histogram_quantile(0.95,sum(rate(http_request_duration_seconds_bucket[5m])) by (le))' \
+            | jq -r '.data.result[0].value[1] // "0"')
+
+          echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
+          echo "latency_p95=$LATENCY_P95" >> $GITHUB_OUTPUT
+
+          echo "📊 Baseline Metrics:"
+          echo "   Error Rate: $ERROR_RATE"
+          echo "   P95 Latency: ${LATENCY_P95}s"
+
+      - name: Validate SLO compliance
+        id: validation
+        run: |
+          ERROR_RATE="${{ steps.metrics.outputs.error_rate }}"
+          LATENCY_P95="${{ steps.metrics.outputs.latency_p95 }}"
+
+          # Check if error rate < 0.1%
+          if (( $(echo "$ERROR_RATE > 0.001" | bc -l) )); then
+            echo "❌ Error rate too high: $ERROR_RATE"
+            echo "can_proceed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Check if P95 latency < 2s
+          if (( $(echo "$LATENCY_P95 > 2.0" | bc -l) )); then
+            echo "❌ Latency too high: ${LATENCY_P95}s"
+            echo "can_proceed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "✅ SLO validation passed"
+          echo "can_proceed=true" >> $GITHUB_OUTPUT
+
+      - name: Notify team
+        if: always()
+        run: |
+          curl -X POST ${{ env.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🌀 Chaos Engineering Test Starting",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Chaos Test Initiated*\n• Environment: `${{ github.event.inputs.environment || \"staging\" }}`\n• Scenario: `${{ github.event.inputs.scenario || \"comprehensive\" }}`\n• Baseline Error Rate: `${{ steps.metrics.outputs.error_rate }}`\n• Baseline P95 Latency: `${{ steps.metrics.outputs.latency_p95 }}s`"
+                  }
+                }
+              ]
+            }'
+
+  # Run chaos experiments
+  chaos-experiments:
+    name: Execute Chaos Scenario
+    runs-on: ubuntu-latest
+    needs: pre-chaos-validation
+    if: needs.pre-chaos-validation.outputs.can-proceed == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Setup Argo CLI
+        run: |
+          curl -sLO https://github.com/argoproj/argo-workflows/releases/download/v3.5.0/argo-linux-amd64.gz
+          gunzip argo-linux-amd64.gz
+          chmod +x argo-linux-amd64
+          sudo mv argo-linux-amd64 /usr/local/bin/argo
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Run network latency chaos
+        if: github.event.inputs.scenario == 'network-latency' || github.event.inputs.scenario == 'comprehensive'
+        timeout-minutes: 10
+        run: |
+          echo "🌐 Running network latency chaos..."
+          kubectl apply -f chaos-engineering/experiments/network/network-latency.yaml
+
+          # Wait for experiment completion
+          kubectl wait --for=condition=AllInjected \
+            networkchaos/graphql-network-latency \
+            -n chaos-testing \
+            --timeout=600s || true
+
+          sleep ${{ github.event.inputs.duration || 300 }}
+
+          # Cleanup
+          kubectl delete -f chaos-engineering/experiments/network/network-latency.yaml || true
+
+      - name: Run pod failure chaos
+        if: github.event.inputs.scenario == 'pod-failure' || github.event.inputs.scenario == 'comprehensive'
+        timeout-minutes: 10
+        run: |
+          echo "💥 Running pod failure chaos..."
+          kubectl apply -f chaos-engineering/experiments/pods/pod-chaos.yaml
+
+          sleep ${{ github.event.inputs.duration || 300 }}
+
+          kubectl delete -f chaos-engineering/experiments/pods/pod-chaos.yaml || true
+
+      - name: Run resource stress chaos
+        if: github.event.inputs.scenario == 'resource-stress' || github.event.inputs.scenario == 'comprehensive'
+        timeout-minutes: 10
+        run: |
+          echo "📈 Running resource stress chaos..."
+          kubectl apply -f chaos-engineering/experiments/stress/stress-chaos.yaml
+
+          sleep ${{ github.event.inputs.duration || 300 }}
+
+          kubectl delete -f chaos-engineering/experiments/stress/stress-chaos.yaml || true
+
+      - name: Run database chaos
+        if: github.event.inputs.scenario == 'database-chaos' || github.event.inputs.scenario == 'comprehensive'
+        timeout-minutes: 10
+        run: |
+          echo "🗄️ Running database chaos..."
+          kubectl apply -f chaos-engineering/litmus/chaosengine/postgres-chaos.yaml
+
+          # Monitor chaos engine
+          ENGINE_NAME=$(kubectl get chaosengine -n chaos-testing -o jsonpath='{.items[-1:].metadata.name}')
+          kubectl wait --for=condition=Completed \
+            chaosengine/$ENGINE_NAME \
+            -n chaos-testing \
+            --timeout=600s || true
+
+      - name: Run cache chaos
+        if: github.event.inputs.scenario == 'cache-chaos' || github.event.inputs.scenario == 'comprehensive'
+        timeout-minutes: 10
+        run: |
+          echo "💾 Running cache chaos..."
+          kubectl apply -f chaos-engineering/litmus/chaosengine/redis-chaos.yaml
+
+          ENGINE_NAME=$(kubectl get chaosengine -n chaos-testing -o jsonpath='{.items[-1:].metadata.name}')
+          kubectl wait --for=condition=Completed \
+            chaosengine/$ENGINE_NAME \
+            -n chaos-testing \
+            --timeout=600s || true
+
+      - name: Run comprehensive workflow
+        if: github.event.inputs.scenario == 'comprehensive'
+        timeout-minutes: 30
+        run: |
+          echo "🔄 Running comprehensive chaos workflow..."
+
+          argo submit chaos-engineering/litmus/workflows/comprehensive-chaos-workflow.yaml \
+            -n chaos-testing \
+            --parameter chaos-duration=${{ github.event.inputs.duration || 300 }} \
+            --parameter blast-radius=${{ github.event.inputs.blast-radius || 30 }} \
+            --parameter environment=${{ github.event.inputs.environment || 'staging' }} \
+            --wait
+
+          # Get workflow status
+          WORKFLOW_NAME=$(argo list -n chaos-testing -o name | head -1)
+          argo get $WORKFLOW_NAME -n chaos-testing
+
+      - name: Monitor during chaos
+        run: |
+          echo "📊 Monitoring system during chaos (60s sample)..."
+
+          for i in {1..12}; do
+            echo "=== Sample $i/12 ==="
+
+            # Error rate
+            ERROR_RATE=$(kubectl exec -n monitoring prometheus-0 -- \
+              promtool query instant http://localhost:9090 \
+              'sum(rate(http_requests_total{status=~"5.."}[1m]))/sum(rate(http_requests_total[1m]))' \
+              | jq -r '.data.result[0].value[1] // "0"')
+
+            # Pod status
+            PODS_NOT_READY=$(kubectl get pods -n llm-marketplace -o json \
+              | jq '[.items[] | select(.status.phase != "Running")] | length')
+
+            echo "Error Rate: $ERROR_RATE"
+            echo "Pods Not Ready: $PODS_NOT_READY"
+            echo ""
+
+            sleep 5
+          done
+
+  # Post-chaos validation
+  post-chaos-validation:
+    name: Post-Chaos Validation
+    runs-on: ubuntu-latest
+    needs: [pre-chaos-validation, chaos-experiments]
+    if: always()
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Wait for system stabilization
+        run: |
+          echo "⏳ Waiting for system stabilization (120s)..."
+          sleep 120
+
+      - name: Verify pod health
+        id: pods
+        run: |
+          NOT_READY=$(kubectl get pods -n llm-marketplace -o json \
+            | jq '[.items[] | select(.status.phase != "Running" or (.status.conditions[] | select(.type == "Ready" and .status != "True")))] | length')
+
+          echo "pods_not_ready=$NOT_READY" >> $GITHUB_OUTPUT
+
+          if [ "$NOT_READY" -gt 0 ]; then
+            echo "⚠️ $NOT_READY pods not ready"
+            kubectl get pods -n llm-marketplace | grep -v Running || true
+          else
+            echo "✅ All pods ready"
+          fi
+
+      - name: Collect final metrics
+        id: final_metrics
+        run: |
+          # Error rate
+          ERROR_RATE=$(kubectl exec -n monitoring prometheus-0 -- \
+            promtool query instant http://localhost:9090 \
+            'sum(rate(http_requests_total{status=~"5.."}[5m]))/sum(rate(http_requests_total[5m]))' \
+            | jq -r '.data.result[0].value[1] // "0"')
+
+          # P95 latency
+          LATENCY_P95=$(kubectl exec -n monitoring prometheus-0 -- \
+            promtool query instant http://localhost:9090 \
+            'histogram_quantile(0.95,sum(rate(http_request_duration_seconds_bucket[5m])) by (le))' \
+            | jq -r '.data.result[0].value[1] // "0"')
+
+          echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
+          echo "latency_p95=$LATENCY_P95" >> $GITHUB_OUTPUT
+
+          echo "📊 Final Metrics:"
+          echo "   Error Rate: $ERROR_RATE"
+          echo "   P95 Latency: ${LATENCY_P95}s"
+
+      - name: Validate recovery
+        id: recovery
+        run: |
+          BASELINE_ERROR="${{ needs.pre-chaos-validation.outputs.baseline-error-rate }}"
+          FINAL_ERROR="${{ steps.final_metrics.outputs.error_rate }}"
+
+          BASELINE_LATENCY="${{ needs.pre-chaos-validation.outputs.baseline-latency }}"
+          FINAL_LATENCY="${{ steps.final_metrics.outputs.latency_p95 }}"
+
+          # Check if error rate returned to baseline (+/- 0.1%)
+          ERROR_DELTA=$(echo "$FINAL_ERROR - $BASELINE_ERROR" | bc -l | awk '{print ($1 < 0) ? -$1 : $1}')
+
+          if (( $(echo "$ERROR_DELTA > 0.001" | bc -l) )); then
+            echo "⚠️ Error rate not recovered: baseline=$BASELINE_ERROR, final=$FINAL_ERROR"
+            echo "recovery_status=degraded" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Error rate recovered"
+            echo "recovery_status=recovered" >> $GITHUB_OUTPUT
+          fi
+
+          # Check latency recovery
+          LATENCY_DELTA=$(echo "$FINAL_LATENCY - $BASELINE_LATENCY" | bc -l | awk '{print ($1 < 0) ? -$1 : $1}')
+
+          if (( $(echo "$LATENCY_DELTA > 0.5" | bc -l) )); then
+            echo "⚠️ Latency not fully recovered: baseline=${BASELINE_LATENCY}s, final=${FINAL_LATENCY}s"
+          fi
+
+      - name: Generate chaos report
+        run: |
+          cat << EOF > chaos-report.md
+          # Chaos Engineering Test Report
+
+          ## Test Details
+          - **Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - **Environment**: ${{ github.event.inputs.environment || 'staging' }}
+          - **Scenario**: ${{ github.event.inputs.scenario || 'comprehensive' }}
+          - **Duration**: ${{ github.event.inputs.duration || 300 }}s
+          - **Blast Radius**: ${{ github.event.inputs.blast-radius || 30 }}%
+
+          ## Metrics Comparison
+
+          | Metric | Baseline | Final | Delta |
+          |--------|----------|-------|-------|
+          | Error Rate | ${{ needs.pre-chaos-validation.outputs.baseline-error-rate }} | ${{ steps.final_metrics.outputs.error_rate }} | $(echo "${{ steps.final_metrics.outputs.error_rate }} - ${{ needs.pre-chaos-validation.outputs.baseline-error-rate }}" | bc -l) |
+          | P95 Latency | ${{ needs.pre-chaos-validation.outputs.baseline-latency }}s | ${{ steps.final_metrics.outputs.latency_p95 }}s | $(echo "${{ steps.final_metrics.outputs.latency_p95 }} - ${{ needs.pre-chaos-validation.outputs.baseline-latency }}" | bc -l)s |
+          | Pods Not Ready | 0 | ${{ steps.pods.outputs.pods_not_ready }} | ${{ steps.pods.outputs.pods_not_ready }} |
+
+          ## Recovery Status
+          **${{ steps.recovery.outputs.recovery_status }}**
+
+          ## Chaos Results
+          \`\`\`
+          $(kubectl get chaosresult -n chaos-testing -o yaml || echo "No chaos results available")
+          \`\`\`
+
+          ## Action Items
+          - [ ] Review chaos results
+          - [ ] Update runbooks if needed
+          - [ ] File issues for any failures
+
+          EOF
+
+          cat chaos-report.md
+
+      - name: Upload chaos report
+        uses: actions/upload-artifact@v3
+        with:
+          name: chaos-report
+          path: chaos-report.md
+
+      - name: Post results to Slack
+        if: always()
+        run: |
+          STATUS_EMOJI="${{ job.status == 'success' && '✅' || '❌' }}"
+          RECOVERY="${{ steps.recovery.outputs.recovery_status }}"
+
+          curl -X POST ${{ env.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "'"$STATUS_EMOJI"' Chaos Test Complete",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Chaos Test Results*\n• Status: `${{ job.status }}`\n• Recovery: `'"$RECOVERY"'`\n• Error Rate: `${{ needs.pre-chaos-validation.outputs.baseline-error-rate }}` → `${{ steps.final_metrics.outputs.error_rate }}`\n• P95 Latency: `${{ needs.pre-chaos-validation.outputs.baseline-latency }}s` → `${{ steps.final_metrics.outputs.latency_p95 }}s`\n• Pods Not Ready: `${{ steps.pods.outputs.pods_not_ready }}`"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {"type": "plain_text", "text": "View Workflow"},
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }'
+
+      - name: Fail if not recovered
+        if: steps.recovery.outputs.recovery_status != 'recovered'
+        run: |
+          echo "❌ System did not fully recover from chaos"
+          exit 1
+
+  # Cleanup
+  cleanup:
+    name: Cleanup Chaos Resources
+    runs-on: ubuntu-latest
+    needs: [chaos-experiments, post-chaos-validation]
+    if: always()
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Delete all chaos resources
+        run: |
+          echo "🧹 Cleaning up chaos resources..."
+
+          kubectl delete chaosengine --all -n chaos-testing || true
+          kubectl delete podchaos --all -n chaos-testing || true
+          kubectl delete networkchaos --all -n chaos-testing || true
+          kubectl delete stresschaos --all -n chaos-testing || true
+          kubectl delete iochaos --all -n chaos-testing || true
+
+          # Delete old chaos results (keep last 10)
+          kubectl get chaosresult -n chaos-testing --sort-by=.metadata.creationTimestamp \
+            | head -n -10 | awk '{print $1}' | xargs -r kubectl delete chaosresult -n chaos-testing || true
+
+          echo "✅ Cleanup complete"

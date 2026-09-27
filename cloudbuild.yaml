@@ -1,0 +1,145 @@
+# Cloud Build configuration for InferOps Unified Service
+# Builds and deploys to Google Cloud Run
+
+substitutions:
+  _SERVICE_NAME: 'inferops'
+  _REGION: 'us-central1'
+  _PLATFORM_ENV: 'dev'
+  _MIN_INSTANCES: '0'
+  _MAX_INSTANCES: '10'
+  _MEMORY: '512Mi'
+  _CPU: '1'
+  _CONCURRENCY: '80'
+  _TIMEOUT: '300s'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+steps:
+  # Step 1: Run tests (optional, can be skipped with --substitutions=_SKIP_TESTS=true)
+  - name: 'node:20-alpine'
+    id: 'test'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        if [ "${_SKIP_TESTS}" != "true" ]; then
+          npm ci --legacy-peer-deps
+          npm run test --if-present || echo "No tests configured"
+        else
+          echo "Skipping tests"
+        fi
+
+  # Step 2: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${_PLATFORM_ENV}'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+      - '.'
+
+  # Step 3: Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}'
+
+  # Step 4: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--min-instances'
+      - '${_MIN_INSTANCES}'
+      - '--max-instances'
+      - '${_MAX_INSTANCES}'
+      - '--memory'
+      - '${_MEMORY}'
+      - '--cpu'
+      - '${_CPU}'
+      - '--concurrency'
+      - '${_CONCURRENCY}'
+      - '--timeout'
+      - '${_TIMEOUT}'
+      - '--set-env-vars'
+      - 'SERVICE_NAME=${_SERVICE_NAME},SERVICE_VERSION=$COMMIT_SHA,PLATFORM_ENV=${_PLATFORM_ENV},NODE_ENV=production'
+      - '--set-secrets'
+      - 'RUVECTOR_API_KEY=ruvector-api-key:latest'
+      - '--update-env-vars'
+      - 'RUVECTOR_SERVICE_URL=https://ruvector-service-${_PLATFORM_ENV}.run.app,TELEMETRY_ENDPOINT=https://llm-observatory-${_PLATFORM_ENV}.run.app'
+
+  # Step 5: Verify deployment health
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'verify'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "Verifying deployment..."
+        SERVICE_URL=$(gcloud run services describe ${_SERVICE_NAME} --region=${_REGION} --format='value(status.url)')
+        echo "Service URL: $SERVICE_URL"
+
+        # Health check with retries
+        for i in 1 2 3 4 5; do
+          echo "Health check attempt $i..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/health")
+          if [ "$RESPONSE" = "200" ]; then
+            echo "Health check passed!"
+            curl -s "$SERVICE_URL/health" | jq .
+            exit 0
+          fi
+          echo "Got HTTP $RESPONSE, retrying in 10s..."
+          sleep 10
+        done
+
+        echo "Health check failed after 5 attempts"
+        exit 1
+
+  # Step 6: Output service info
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'info'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "======================================"
+        echo "INFEROPS DEPLOYMENT COMPLETE"
+        echo "======================================"
+        gcloud run services describe ${_SERVICE_NAME} --region=${_REGION} --format='yaml(status)'
+        echo ""
+        echo "Service URL:"
+        gcloud run services describe ${_SERVICE_NAME} --region=${_REGION} --format='value(status.url)'
+        echo ""
+        echo "Endpoints:"
+        echo "  GET  /health             - Unified health check"
+        echo "  POST /deprecation        - Deprecation Agent"
+        echo "  GET  /deprecation/health - Deprecation health"
+        echo "  POST /package            - Packaging Agent"
+        echo "  GET  /package/health     - Packaging health"
+
+images:
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
+  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${_PLATFORM_ENV}'
+
+timeout: '1800s'

@@ -1,0 +1,583 @@
+"""
+Service status enum
+"""
+enum ServiceStatus {
+  """
+  Draft - not yet submitted
+  """
+  DRAFT
+
+  """
+  Pending review
+  """
+  PENDING
+
+  """
+  Approved and active
+  """
+  APPROVED
+
+  """
+  Rejected
+  """
+  REJECTED
+
+  """
+  Deprecated/archived
+  """
+  DEPRECATED
+}
+
+"""
+Pricing model enum
+"""
+enum PricingModel {
+  """
+  Free to use
+  """
+  FREE
+
+  """
+  Pay per use
+  """
+  PAY_PER_USE
+
+  """
+  Monthly subscription
+  """
+  SUBSCRIPTION
+}
+
+"""
+Service provider information
+"""
+type Provider {
+  """
+  Provider ID
+  """
+  id: ID!
+
+  """
+  Provider name
+  """
+  name: String!
+
+  """
+  Contact email
+  """
+  email: EmailAddress!
+
+  """
+  Provider rating (0-5)
+  """
+  rating: NonNegativeFloat
+
+  """
+  Verified provider badge
+  """
+  verified: Boolean!
+}
+
+"""
+Pricing information
+"""
+type Pricing {
+  """
+  Pricing model
+  """
+  model: PricingModel!
+
+  """
+  Price amount
+  """
+  price: NonNegativeFloat
+
+  """
+  Currency code (e.g., USD, EUR)
+  """
+  currency: String
+
+  """
+  Pricing tier information
+  """
+  tiers: [PricingTier!]
+}
+
+"""
+Pricing tier
+"""
+type PricingTier {
+  """
+  Tier name
+  """
+  name: String!
+
+  """
+  Requests included in tier
+  """
+  requestsIncluded: PositiveInt!
+
+  """
+  Price for this tier
+  """
+  price: NonNegativeFloat!
+
+  """
+  Price per additional request
+  """
+  overagePrice: NonNegativeFloat
+}
+
+"""
+Service endpoint
+"""
+type ServiceEndpoint {
+  """
+  Endpoint URL
+  """
+  url: URL!
+
+  """
+  HTTP method
+  """
+  method: String!
+
+  """
+  Endpoint description
+  """
+  description: String!
+
+  """
+  Request schema (JSON Schema)
+  """
+  requestSchema: JSON
+
+  """
+  Response schema (JSON Schema)
+  """
+  responseSchema: JSON
+}
+
+"""
+LLM Service
+"""
+type Service {
+  """
+  Unique service ID
+  """
+  id: ID!
+
+  """
+  Service name
+  """
+  name: String!
+
+  """
+  Service description
+  """
+  description: String!
+
+  """
+  Service category
+  """
+  category: String!
+
+  """
+  Service version
+  """
+  version: String!
+
+  """
+  Provider information
+  """
+  provider: Provider!
+
+  """
+  Pricing information
+  """
+  pricing: Pricing!
+
+  """
+  Current status
+  """
+  status: ServiceStatus!
+
+  """
+  Service tags
+  """
+  tags: [String!]!
+
+  """
+  API endpoints
+  """
+  endpoints: [ServiceEndpoint!]!
+
+  """
+  Service rating (0-5)
+  """
+  rating: NonNegativeFloat
+
+  """
+  Number of ratings
+  """
+  ratingCount: NonNegativeInt
+
+  """
+  Total usage count
+  """
+  usageCount: NonNegativeInt!
+
+  """
+  Creation timestamp
+  """
+  createdAt: DateTime!
+
+  """
+  Last update timestamp
+  """
+  updatedAt: DateTime!
+
+  """
+  Additional metadata
+  """
+  metadata: JSON
+
+  """
+  Approval notes (for approved/rejected services)
+  """
+  approvalNotes: String
+
+  """
+  Service logo URL
+  """
+  logoUrl: URL
+
+  """
+  Documentation URL
+  """
+  documentationUrl: URL
+}
+
+"""
+Service edge for pagination
+"""
+type ServiceEdge implements Edge {
+  """
+  The service node
+  """
+  node: Service!
+
+  """
+  Cursor for this edge
+  """
+  cursor: String!
+}
+
+"""
+Service connection for pagination
+"""
+type ServiceConnection implements Connection {
+  """
+  List of service edges
+  """
+  edges: [ServiceEdge!]!
+
+  """
+  Page information
+  """
+  pageInfo: PageInfo!
+
+  """
+  Total count (if available)
+  """
+  totalCount: Int
+}
+
+"""
+Service filter input
+"""
+input ServiceFilter {
+  """
+  Filter by category
+  """
+  category: String
+
+  """
+  Filter by status
+  """
+  status: ServiceStatus
+
+  """
+  Filter by tags
+  """
+  tags: [String!]
+
+  """
+  Filter by provider ID
+  """
+  providerId: ID
+
+  """
+  Minimum rating
+  """
+  minRating: NonNegativeFloat
+
+  """
+  Pricing model filter
+  """
+  pricingModel: PricingModel
+
+  """
+  Sort field
+  """
+  sortBy: ServiceSortField
+
+  """
+  Sort order
+  """
+  sortOrder: SortOrder
+}
+
+"""
+Service sort field
+"""
+enum ServiceSortField {
+  NAME
+  CREATED_AT
+  UPDATED_AT
+  RATING
+  USAGE_COUNT
+}
+
+"""
+Sort order
+"""
+enum SortOrder {
+  ASC
+  DESC
+}
+
+"""
+Create service input
+"""
+input CreateServiceInput {
+  """
+  Service name
+  """
+  name: String!
+
+  """
+  Service description
+  """
+  description: String!
+
+  """
+  Service category
+  """
+  category: String!
+
+  """
+  Service version
+  """
+  version: String!
+
+  """
+  Pricing information
+  """
+  pricing: PricingInput!
+
+  """
+  Service tags
+  """
+  tags: [String!]
+
+  """
+  API endpoints
+  """
+  endpoints: [ServiceEndpointInput!]!
+
+  """
+  Additional metadata
+  """
+  metadata: JSON
+
+  """
+  Service logo URL
+  """
+  logoUrl: URL
+
+  """
+  Documentation URL
+  """
+  documentationUrl: URL
+}
+
+"""
+Update service input
+"""
+input UpdateServiceInput {
+  """
+  Service name
+  """
+  name: String
+
+  """
+  Service description
+  """
+  description: String
+
+  """
+  Service category
+  """
+  category: String
+
+  """
+  Service version
+  """
+  version: String
+
+  """
+  Pricing information
+  """
+  pricing: PricingInput
+
+  """
+  Service tags
+  """
+  tags: [String!]
+
+  """
+  API endpoints
+  """
+  endpoints: [ServiceEndpointInput!]
+
+  """
+  Additional metadata
+  """
+  metadata: JSON
+
+  """
+  Service logo URL
+  """
+  logoUrl: URL
+
+  """
+  Documentation URL
+  """
+  documentationUrl: URL
+}
+
+"""
+Pricing input
+"""
+input PricingInput {
+  """
+  Pricing model
+  """
+  model: PricingModel!
+
+  """
+  Price amount
+  """
+  price: NonNegativeFloat
+
+  """
+  Currency code
+  """
+  currency: String
+
+  """
+  Pricing tiers
+  """
+  tiers: [PricingTierInput!]
+}
+
+"""
+Pricing tier input
+"""
+input PricingTierInput {
+  """
+  Tier name
+  """
+  name: String!
+
+  """
+  Requests included
+  """
+  requestsIncluded: PositiveInt!
+
+  """
+  Price for tier
+  """
+  price: NonNegativeFloat!
+
+  """
+  Overage price
+  """
+  overagePrice: NonNegativeFloat
+}
+
+"""
+Service endpoint input
+"""
+input ServiceEndpointInput {
+  """
+  Endpoint URL
+  """
+  url: URL!
+
+  """
+  HTTP method
+  """
+  method: String!
+
+  """
+  Endpoint description
+  """
+  description: String!
+
+  """
+  Request schema
+  """
+  requestSchema: JSON
+
+  """
+  Response schema
+  """
+  responseSchema: JSON
+}
+
+"""
+Service result union
+"""
+union ServiceResult = Service | ValidationError | NotFoundError | AuthorizationError
+
+"""
+Delete result
+"""
+type DeleteResult {
+  """
+  Whether deletion was successful
+  """
+  success: Boolean!
+
+  """
+  Deleted service ID
+  """
+  id: ID
+}
+
+"""
+Validation result
+"""
+type ValidationResult {
+  """
+  Whether validation passed
+  """
+  valid: Boolean!
+
+  """
+  Validation errors
+  """
+  errors: [FieldError!]
+}

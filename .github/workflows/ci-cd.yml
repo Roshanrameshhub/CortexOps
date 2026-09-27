@@ -1,0 +1,379 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+  GO_VERSION: '1.21'
+  RUST_VERSION: 'stable'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ===================================
+  # Test Jobs
+  # ===================================
+  test-publishing:
+    name: Test Publishing Service
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: llm_marketplace_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm run test:unit
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/llm_marketplace_test
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: publishing-service
+
+  test-discovery:
+    name: Test Discovery Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/discovery/go.sum
+
+      - name: Install dependencies
+        working-directory: services/discovery
+        run: go mod download
+
+      - name: Run linting
+        working-directory: services/discovery
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run
+
+      - name: Run tests
+        working-directory: services/discovery
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./services/discovery/coverage.out
+          flags: discovery-service
+
+  test-consumption:
+    name: Test Consumption Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run linting
+        working-directory: services/consumption
+        run: |
+          cargo fmt -- --check
+          cargo clippy -- -D warnings
+
+      - name: Run tests
+        working-directory: services/consumption
+        run: cargo test --all-features
+
+      - name: Generate coverage
+        working-directory: services/consumption
+        run: |
+          cargo install cargo-tarpaulin
+          cargo tarpaulin --out Xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./services/consumption/cobertura.xml
+          flags: consumption-service
+
+  test-admin:
+    name: Test Admin Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: services/admin
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pylint black
+
+      - name: Run linting
+        working-directory: services/admin
+        run: |
+          black --check .
+          pylint **/*.py
+
+      - name: Run tests
+        working-directory: services/admin
+        run: pytest --cov=. --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./services/admin/coverage.xml
+          flags: admin-service
+
+  # ===================================
+  # Security Scan
+  # ===================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk Security Scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ===================================
+  # Build Jobs
+  # ===================================
+  build:
+    name: Build Services
+    needs: [test-publishing, test-discovery, test-consumption, test-admin, security-scan]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Publishing Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/publishing
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/inferops-publishing:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/inferops-publishing:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Discovery Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/discovery
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/inferops-discovery:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/inferops-discovery:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Consumption Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/consumption
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/inferops-consumption:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/inferops-consumption:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Admin Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/admin
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/inferops-admin:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/inferops-admin:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===================================
+  # Deploy to Staging
+  # ===================================
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging.llm-marketplace.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to staging
+        run: |
+          kubectl config use-context staging
+          kubectl apply -k infrastructure/kubernetes/overlays/staging
+          kubectl rollout status deployment/publishing-service -n llm-marketplace-staging
+          kubectl rollout status deployment/discovery-service -n llm-marketplace-staging
+          kubectl rollout status deployment/consumption-service -n llm-marketplace-staging
+          kubectl rollout status deployment/admin-service -n llm-marketplace-staging
+
+      - name: Run smoke tests
+        run: |
+          npm run test:e2e -- --env=staging
+
+  # ===================================
+  # Deploy to Production
+  # ===================================
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://llm-marketplace.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to production
+        run: |
+          kubectl config use-context production
+          kubectl apply -k infrastructure/kubernetes/overlays/production
+          kubectl rollout status deployment/publishing-service -n llm-marketplace
+          kubectl rollout status deployment/discovery-service -n llm-marketplace
+          kubectl rollout status deployment/consumption-service -n llm-marketplace
+          kubectl rollout status deployment/admin-service -n llm-marketplace
+
+      - name: Run smoke tests
+        run: |
+          npm run test:e2e -- --env=production
+
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment completed successfully'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()

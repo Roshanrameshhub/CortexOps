@@ -1,0 +1,105 @@
+{
+  "environment": "development",
+  "server": {
+    "port": 3000,
+    "host": "localhost",
+    "cors": {
+      "enabled": true,
+      "origin": ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
+      "credentials": true
+    }
+  },
+  "database": {
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "llm_marketplace",
+      "user": "marketplace_user",
+      "password": "marketplace_password",
+      "pool": {
+        "min": 2,
+        "max": 10
+      },
+      "ssl": false
+    }
+  },
+  "cache": {
+    "redis": {
+      "host": "localhost",
+      "port": 6379,
+      "password": "redis_password",
+      "db": 0,
+      "ttl": 3600
+    }
+  },
+  "search": {
+    "elasticsearch": {
+      "url": "http://localhost:9200",
+      "indexPrefix": "marketplace-dev"
+    }
+  },
+  "messaging": {
+    "kafka": {
+      "brokers": ["localhost:29092"],
+      "clientId": "llm-marketplace-dev",
+      "groupId": "marketplace-consumers-dev",
+      "topicPrefix": "marketplace-dev"
+    }
+  },
+  "observability": {
+    "jaeger": {
+      "enabled": true,
+      "endpoint": "http://localhost:14268/api/traces",
+      "samplerType": "const",
+      "samplerParam": 1
+    },
+    "prometheus": {
+      "enabled": true,
+      "port": 9091
+    },
+    "logging": {
+      "level": "debug",
+      "format": "pretty",
+      "output": "stdout"
+    }
+  },
+  "security": {
+    "jwt": {
+      "secret": "dev-secret-change-in-production",
+      "expiresIn": "24h",
+      "refreshExpiresIn": "7d"
+    },
+    "rateLimiting": {
+      "enabled": true,
+      "windowMs": 60000,
+      "maxRequests": 1000
+    }
+  },
+  "integrations": {
+    "registry": {
+      "url": "http://localhost:4000",
+      "apiKey": "dev-registry-key",
+      "syncInterval": 3600000
+    },
+    "policyEngine": {
+      "url": "http://localhost:4001",
+      "grpcUrl": "localhost:50051",
+      "apiKey": "dev-policy-key"
+    },
+    "analyticsHub": {
+      "url": "http://localhost:4002",
+      "apiKey": "dev-analytics-key",
+      "batchSize": 100
+    },
+    "governanceDashboard": {
+      "url": "http://localhost:4003",
+      "apiKey": "dev-governance-key"
+    }
+  },
+  "features": {
+    "aiRecommendations": true,
+    "advancedAnalytics": true,
+    "multiRegion": false,
+    "customDomains": false
+  }
+}

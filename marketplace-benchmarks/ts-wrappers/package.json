@@ -1,0 +1,22 @@
+{
+  "name": "marketplace-benchmark-wrappers",
+  "version": "1.0.0",
+  "description": "TypeScript CLI wrappers for marketplace benchmarking",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "listing": "node --loader ts-node/esm listing-cli.ts",
+    "registry": "node --loader ts-node/esm registry-cli.ts",
+    "validation": "node --loader ts-node/esm validation-cli.ts",
+    "search": "node --loader ts-node/esm search-cli.ts"
+  },
+  "dependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

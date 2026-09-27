@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'llm-marketplace'
+    environment: 'development'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'publishing-service'
+    static_configs:
+      - targets: ['publishing-service:9091']
+    metrics_path: '/metrics'
+
+  - job_name: 'discovery-service'
+    static_configs:
+      - targets: ['discovery-service:9091']
+    metrics_path: '/metrics'
+
+  - job_name: 'consumption-service'
+    static_configs:
+      - targets: ['consumption-service:9091']
+    metrics_path: '/metrics'
+
+  - job_name: 'admin-service'
+    static_configs:
+      - targets: ['admin-service:9091']
+    metrics_path: '/metrics'

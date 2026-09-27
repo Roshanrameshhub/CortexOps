@@ -1,0 +1,41 @@
+# Source files
+*.ts
+!*.d.ts
+!src/schema/**/*.graphql
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+jest.config.js
+coverage/
+tests/
+
+# Development
+.env
+.env.local
+.env.*.local
+.env.example
+node_modules/
+.vscode/
+.idea/
+
+# Build artifacts
+*.tsbuildinfo
+tsconfig.json
+tsconfig.*.json
+
+# Config files
+.eslintrc.js
+.prettierrc.js
+.github/
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
+DESIGN.md
+docker-compose.yml
+Dockerfile
+Makefile
+scripts/

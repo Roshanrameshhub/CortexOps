@@ -1,0 +1,108 @@
+{
+  "environment": "staging",
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origin": ["https://staging.llm-marketplace.example.com"],
+      "credentials": true
+    }
+  },
+  "database": {
+    "postgres": {
+      "host": "${DB_HOST}",
+      "port": 5432,
+      "database": "llm_marketplace_staging",
+      "user": "${DB_USER}",
+      "password": "${DB_PASSWORD}",
+      "pool": {
+        "min": 5,
+        "max": 20
+      },
+      "ssl": true
+    }
+  },
+  "cache": {
+    "redis": {
+      "host": "${REDIS_HOST}",
+      "port": 6379,
+      "password": "${REDIS_PASSWORD}",
+      "db": 0,
+      "ttl": 1800
+    }
+  },
+  "search": {
+    "elasticsearch": {
+      "url": "${ELASTICSEARCH_URL}",
+      "indexPrefix": "marketplace-staging",
+      "username": "${ELASTICSEARCH_USERNAME}",
+      "password": "${ELASTICSEARCH_PASSWORD}"
+    }
+  },
+  "messaging": {
+    "kafka": {
+      "brokers": "${KAFKA_BROKERS}".split(","),
+      "clientId": "llm-marketplace-staging",
+      "groupId": "marketplace-consumers-staging",
+      "topicPrefix": "marketplace-staging",
+      "ssl": true
+    }
+  },
+  "observability": {
+    "jaeger": {
+      "enabled": true,
+      "endpoint": "${JAEGER_ENDPOINT}",
+      "samplerType": "probabilistic",
+      "samplerParam": 0.1
+    },
+    "prometheus": {
+      "enabled": true,
+      "port": 9091
+    },
+    "logging": {
+      "level": "info",
+      "format": "json",
+      "output": "stdout"
+    }
+  },
+  "security": {
+    "jwt": {
+      "secret": "${JWT_SECRET}",
+      "expiresIn": "12h",
+      "refreshExpiresIn": "7d"
+    },
+    "rateLimiting": {
+      "enabled": true,
+      "windowMs": 60000,
+      "maxRequests": 500
+    }
+  },
+  "integrations": {
+    "registry": {
+      "url": "${REGISTRY_URL}",
+      "apiKey": "${REGISTRY_API_KEY}",
+      "syncInterval": 1800000
+    },
+    "policyEngine": {
+      "url": "${POLICY_ENGINE_URL}",
+      "grpcUrl": "${POLICY_ENGINE_GRPC_URL}",
+      "apiKey": "${POLICY_ENGINE_API_KEY}"
+    },
+    "analyticsHub": {
+      "url": "${ANALYTICS_HUB_URL}",
+      "apiKey": "${ANALYTICS_HUB_API_KEY}",
+      "batchSize": 500
+    },
+    "governanceDashboard": {
+      "url": "${GOVERNANCE_DASHBOARD_URL}",
+      "apiKey": "${GOVERNANCE_DASHBOARD_API_KEY}"
+    }
+  },
+  "features": {
+    "aiRecommendations": true,
+    "advancedAnalytics": true,
+    "multiRegion": false,
+    "customDomains": false
+  }
+}

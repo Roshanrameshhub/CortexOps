@@ -1,0 +1,34 @@
+# Cloud Function deployment — exclude everything not needed at runtime.
+.gcloudignore
+.git
+.gitignore
+.github/
+.vscode/
+.env*
+
+# Documentation & metadata
+docs/
+*.md
+LICENSE
+
+# Build & CI
+Dockerfile
+docker-compose.yml
+cloudbuild.yaml
+coverage/
+.nyc_output/
+
+# Dev tooling
+crates/
+infrastructure/
+scripts/
+sdks/
+tests/
+
+# Services not used by the Cloud Function
+services/
+
+# Large / unnecessary directories
+node_modules/
+*.log
+*.tgz

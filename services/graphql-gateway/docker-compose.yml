@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  graphql-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - REDIS_URL=redis://redis:6379
+      - API_BASE_URL=http://host.docker.internal:3000
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - llm-marketplace
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - llm-marketplace
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  llm-marketplace:
+    driver: bridge

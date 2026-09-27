@@ -1,0 +1,194 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run E2E tests nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    name: Run E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test-suite:
+          - publishing
+          - discovery
+          - consumption
+          - approval
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: llm_marketplace_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/e2e/package-lock.json
+
+      - name: Install E2E test dependencies
+        working-directory: tests/e2e
+        run: npm ci
+
+      - name: Start Elasticsearch
+        run: |
+          docker run -d \
+            --name elasticsearch \
+            -p 9200:9200 \
+            -e "discovery.type=single-node" \
+            -e "xpack.security.enabled=false" \
+            -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+            docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+
+      - name: Start Kafka
+        run: |
+          docker run -d --name zookeeper -p 2181:2181 \
+            -e ZOOKEEPER_CLIENT_PORT=2181 \
+            confluentinc/cp-zookeeper:7.5.3
+
+          sleep 10
+
+          docker run -d --name kafka -p 9092:9092 \
+            --link zookeeper \
+            -e KAFKA_BROKER_ID=1 \
+            -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            confluentinc/cp-kafka:7.5.3
+
+      - name: Wait for services to be ready
+        run: |
+          # Wait for Elasticsearch
+          timeout 60 bash -c 'until curl -f http://localhost:9200/_cluster/health; do sleep 2; done'
+
+          # Wait for Kafka
+          sleep 20
+
+      - name: Build service Docker images
+        run: |
+          docker build -t inferops/publishing:test ./services/publishing
+          docker build -t inferops/discovery:test ./services/discovery
+          docker build -t inferops/consumption:test ./services/consumption
+          docker build -t inferops/admin:test ./services/admin
+
+      - name: Start microservices
+        run: |
+          docker-compose -f tests/e2e/docker-compose.test.yml up -d
+          sleep 30
+
+      - name: Verify services are healthy
+        run: |
+          curl -f http://localhost:3001/health || exit 1
+          curl -f http://localhost:3002/health || exit 1
+          curl -f http://localhost:3003/health || exit 1
+          curl -f http://localhost:3004/health || exit 1
+
+      - name: Run E2E tests - ${{ matrix.test-suite }}
+        working-directory: tests/e2e
+        run: npm run test:${{ matrix.test-suite }}
+        env:
+          CI: true
+          NODE_ENV: test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results-${{ matrix.test-suite }}
+          path: |
+            tests/e2e/reports/
+            tests/e2e/coverage/
+          retention-days: 30
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-logs-${{ matrix.test-suite }}
+          path: |
+            tests/e2e/logs/
+          retention-days: 7
+
+      - name: Collect Docker logs on failure
+        if: failure()
+        run: |
+          docker-compose -f tests/e2e/docker-compose.test.yml logs > tests/e2e/logs/docker-compose.log
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f tests/e2e/docker-compose.test.yml down -v
+          docker stop elasticsearch kafka zookeeper || true
+          docker rm elasticsearch kafka zookeeper || true
+
+  e2e-summary:
+    name: E2E Test Summary
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.e2e-tests.result }}" == "success" ]; then
+            echo "✅ All E2E tests passed"
+            exit 0
+          else
+            echo "❌ Some E2E tests failed"
+            exit 1
+          fi
+
+      - name: Post to Slack
+        if: failure() && github.ref == 'refs/heads/main'
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "E2E Tests Failed on main branch",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ E2E tests failed on `main` branch\n*Workflow:* ${{ github.workflow }}\n*Commit:* ${{ github.sha }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

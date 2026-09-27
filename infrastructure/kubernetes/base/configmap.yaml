@@ -1,0 +1,52 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marketplace-config
+  namespace: llm-marketplace
+data:
+  # Database Configuration
+  POSTGRES_DB: llm_marketplace
+  POSTGRES_HOST: postgres-service
+  POSTGRES_PORT: "5432"
+
+  # Redis Configuration
+  REDIS_HOST: redis-service
+  REDIS_PORT: "6379"
+
+  # Elasticsearch Configuration
+  ELASTICSEARCH_URL: http://elasticsearch-service:9200
+  ELASTICSEARCH_INDEX: marketplace-services
+
+  # Kafka Configuration
+  KAFKA_BROKERS: kafka-service:9092
+  KAFKA_TOPIC_EVENTS: marketplace-events
+  KAFKA_TOPIC_METRICS: marketplace-metrics
+  KAFKA_TOPIC_AUDIT: marketplace-audit
+
+  # Observability
+  JAEGER_ENDPOINT: http://jaeger-collector:14268/api/traces
+  OTLP_ENDPOINT: http://otel-collector:4317
+  PROMETHEUS_PORT: "9090"
+
+  # Service Ports
+  PUBLISHING_SERVICE_PORT: "3001"
+  DISCOVERY_SERVICE_PORT: "3002"
+  CONSUMPTION_SERVICE_PORT: "3003"
+  ADMIN_SERVICE_PORT: "3004"
+
+  # Application Configuration
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+  ENVIRONMENT: production
+
+  # Performance Tuning
+  WORKER_THREADS: "4"
+  MAX_CONNECTIONS: "1000"
+  REQUEST_TIMEOUT: "30000"
+
+  # Feature Flags
+  ENABLE_TRACING: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_CACHING: "true"
+  ENABLE_RATE_LIMITING: "true"

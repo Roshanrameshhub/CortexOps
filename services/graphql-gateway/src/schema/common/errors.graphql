@@ -1,0 +1,200 @@
+"""
+Error code enum
+"""
+enum ErrorCode {
+  """
+  Authentication failed - invalid or missing credentials
+  """
+  AUTHENTICATION_ERROR
+
+  """
+  Authorization failed - insufficient permissions
+  """
+  AUTHORIZATION_ERROR
+
+  """
+  Resource not found
+  """
+  NOT_FOUND
+
+  """
+  Input validation failed
+  """
+  VALIDATION_ERROR
+
+  """
+  Rate limit exceeded
+  """
+  RATE_LIMIT_EXCEEDED
+
+  """
+  Internal server error
+  """
+  INTERNAL_ERROR
+
+  """
+  Service unavailable
+  """
+  SERVICE_UNAVAILABLE
+
+  """
+  Conflict - resource already exists or state conflict
+  """
+  CONFLICT
+
+  """
+  Bad request - general client error
+  """
+  BAD_REQUEST
+}
+
+"""
+Base error interface
+"""
+interface Error {
+  """
+  Human-readable error message
+  """
+  message: String!
+
+  """
+  Error code for programmatic handling
+  """
+  code: ErrorCode!
+
+  """
+  GraphQL path where error occurred
+  """
+  path: [String!]
+
+  """
+  Timestamp when error occurred
+  """
+  timestamp: DateTime!
+
+  """
+  Unique request ID for debugging
+  """
+  requestId: String
+}
+
+"""
+Authentication error
+"""
+type AuthenticationError implements Error {
+  message: String!
+  code: ErrorCode!
+  path: [String!]
+  timestamp: DateTime!
+  requestId: String
+}
+
+"""
+Authorization error
+"""
+type AuthorizationError implements Error {
+  message: String!
+  code: ErrorCode!
+  path: [String!]
+  timestamp: DateTime!
+  requestId: String
+
+  """
+  Required permission
+  """
+  requiredPermission: String
+}
+
+"""
+Not found error
+"""
+type NotFoundError implements Error {
+  message: String!
+  code: ErrorCode!
+  path: [String!]
+  timestamp: DateTime!
+  requestId: String
+
+  """
+  Resource type that was not found
+  """
+  resourceType: String
+
+  """
+  Resource ID that was not found
+  """
+  resourceId: String
+}
+
+"""
+Validation error
+"""
+type ValidationError implements Error {
+  message: String!
+  code: ErrorCode!
+  path: [String!]
+  timestamp: DateTime!
+  requestId: String
+
+  """
+  Field-specific validation errors
+  """
+  fields: [FieldError!]!
+}
+
+"""
+Field-level validation error
+"""
+type FieldError {
+  """
+  Field name
+  """
+  field: String!
+
+  """
+  Error message for this field
+  """
+  message: String!
+
+  """
+  Validation constraint that failed
+  """
+  constraint: String
+}
+
+"""
+Rate limit error
+"""
+type RateLimitError implements Error {
+  message: String!
+  code: ErrorCode!
+  path: [String!]
+  timestamp: DateTime!
+  requestId: String
+
+  """
+  Rate limit
+  """
+  limit: Int!
+
+  """
+  Time window in seconds
+  """
+  window: Int!
+
+  """
+  When the rate limit resets
+  """
+  retryAfter: DateTime!
+}
+
+"""
+Internal server error
+"""
+type InternalError implements Error {
+  message: String!
+  code: ErrorCode!
+  path: [String!]
+  timestamp: DateTime!
+  requestId: String
+}

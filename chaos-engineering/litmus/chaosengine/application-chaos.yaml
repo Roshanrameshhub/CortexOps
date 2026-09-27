@@ -1,0 +1,306 @@
+# Application-Level Chaos Engines
+# Tests GraphQL Gateway, ML Recommendations, and Tenant Management services
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: graphql-gateway-chaos
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: application
+    severity: high
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=graphql-gateway'
+    appkind: 'deployment'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Pod autoscaler test - kill pods and watch scaling
+    - name: pod-autoscaler
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '300'
+
+            - name: REPLICA_COUNT
+              value: '5'
+
+    # Pod delete with percentage
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            - name: CHAOS_INTERVAL
+              value: '10'
+
+            - name: FORCE
+              value: 'false'
+
+            - name: PODS_AFFECTED_PERC
+              value: '30'
+
+    # HTTP request chaos
+    - name: pod-http-status-code
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: TARGET_SERVICE_PORT
+              value: '4000'
+
+            - name: STATUS_CODE
+              value: '500'
+
+            - name: MODIFY_RESPONSE_BODY
+              value: 'true'
+
+            - name: RESPONSE_BODY
+              value: '{"error": "Internal Server Error"}'
+
+            - name: CONTENT_TYPE
+              value: 'application/json'
+
+    # HTTP latency injection
+    - name: pod-http-latency
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: TARGET_SERVICE_PORT
+              value: '4000'
+
+            - name: LATENCY
+              value: '5000'  # 5 seconds
+
+            - name: TOXICITY
+              value: '50'  # 50% of requests
+
+---
+# ML Recommendations Service Chaos
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: ml-recommendations-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=ml-recommendations'
+    appkind: 'deployment'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # CPU stress during inference
+    - name: pod-cpu-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: CPU_CORES
+              value: '2'
+
+            - name: CPU_LOAD
+              value: '90'
+
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+
+    # Memory stress during model loading
+    - name: pod-memory-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: MEMORY_CONSUMPTION
+              value: '2048'  # 2GB
+
+            - name: NUMBER_OF_WORKERS
+              value: '4'
+
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+
+    # Disk I/O stress for model files
+    - name: pod-io-stress
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: FILESYSTEM_UTILIZATION_PERCENTAGE
+              value: '70'
+
+            - name: NUMBER_OF_WORKERS
+              value: '4'
+
+            - name: VOLUME_MOUNT_PATH
+              value: '/app/models'
+
+    # Network latency to feature store
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+            - name: NETWORK_LATENCY
+              value: '1000'  # 1 second
+
+            - name: JITTER
+              value: '200'
+
+---
+# Tenant Management Service Chaos
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: tenant-management-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=tenant-management'
+    appkind: 'deployment'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Container kill during quota enforcement
+    - name: container-kill
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            - name: CHAOS_INTERVAL
+              value: '15'
+
+            - name: CONTAINER_RUNTIME
+              value: 'containerd'
+
+            - name: TARGET_CONTAINER
+              value: 'tenant-management'
+
+            - name: SIGNAL
+              value: 'SIGTERM'
+
+    # Network corruption for API calls
+    - name: pod-network-corruption
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+            - name: NETWORK_PACKET_CORRUPTION_PERCENTAGE
+              value: '10'
+
+    # DNS chaos
+    - name: pod-dns-error
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: TARGET_HOSTNAMES
+              value: 'postgres.llm-marketplace.svc.cluster.local,redis.llm-marketplace.svc.cluster.local'
+
+            - name: MATCH_SCHEME
+              value: 'exact'
+
+---
+# Message Queue Chaos (RabbitMQ/Kafka)
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: message-queue-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=rabbitmq'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Broker pod kill
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            - name: CHAOS_INTERVAL
+              value: '20'
+
+            - name: FORCE
+              value: 'false'
+
+    # Network partition between brokers
+    - name: pod-network-partition
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '90'
+
+            - name: DESTINATION_IPS
+              value: 'rabbitmq-1.rabbitmq.llm-marketplace.svc.cluster.local,rabbitmq-2.rabbitmq.llm-marketplace.svc.cluster.local'
+
+            - name: TARGET_POD
+              value: 'rabbitmq-0'
+
+    # Disk fill on message queue
+    - name: disk-fill
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: FILL_PERCENTAGE
+              value: '85'
+
+            - name: CONTAINER_PATH
+              value: '/var/lib/rabbitmq'

@@ -1,0 +1,87 @@
+"""
+Require authentication for this field or type
+"""
+directive @auth on FIELD_DEFINITION | OBJECT
+
+"""
+Require specific role for this field
+"""
+directive @requireRole(
+  """
+  Required role
+  """
+  role: Role!
+) on FIELD_DEFINITION
+
+"""
+Apply rate limiting to this field
+"""
+directive @rateLimit(
+  """
+  Maximum number of requests
+  """
+  limit: Int!
+
+  """
+  Time window in seconds
+  """
+  window: Int!
+) on FIELD_DEFINITION
+
+"""
+Cache this field's result
+"""
+directive @cacheControl(
+  """
+  Maximum cache age in seconds
+  """
+  maxAge: Int!
+
+  """
+  Cache scope (PUBLIC or PRIVATE)
+  """
+  scope: CacheControlScope = PUBLIC
+) on FIELD_DEFINITION | OBJECT
+
+"""
+Mark field or type as deprecated
+"""
+directive @deprecated(
+  """
+  Reason for deprecation
+  """
+  reason: String = "No longer supported"
+) on FIELD_DEFINITION | ENUM_VALUE | INPUT_FIELD_DEFINITION
+
+"""
+Cache control scope
+"""
+enum CacheControlScope {
+  PUBLIC
+  PRIVATE
+}
+
+"""
+User roles
+"""
+enum Role {
+  """
+  Regular user
+  """
+  USER
+
+  """
+  Service provider
+  """
+  PROVIDER
+
+  """
+  Administrator
+  """
+  ADMIN
+
+  """
+  Super administrator
+  """
+  SUPER_ADMIN
+}

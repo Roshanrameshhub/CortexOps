@@ -1,0 +1,69 @@
+"""
+Pagination input for cursor-based pagination
+"""
+input PaginationInput {
+  """
+  Maximum number of items to return (default: 10, max: 100)
+  """
+  limit: PositiveInt = 10
+
+  """
+  Cursor for fetching next page
+  """
+  cursor: String
+}
+
+"""
+Page information for cursor-based pagination
+"""
+type PageInfo {
+  """
+  Cursor for the next page
+  """
+  endCursor: String
+
+  """
+  Whether there are more items available
+  """
+  hasNextPage: Boolean!
+
+  """
+  Cursor for the previous page
+  """
+  startCursor: String
+
+  """
+  Whether there are items before the current page
+  """
+  hasPreviousPage: Boolean!
+
+  """
+  Total number of items (may not always be available)
+  """
+  totalCount: Int
+}
+
+"""
+Edge type for connection pattern
+"""
+interface Edge {
+  """
+  Cursor for this edge
+  """
+  cursor: String!
+}
+
+"""
+Connection interface for paginated results
+"""
+interface Connection {
+  """
+  List of edges
+  """
+  edges: [Edge!]!
+
+  """
+  Page information
+  """
+  pageInfo: PageInfo!
+}

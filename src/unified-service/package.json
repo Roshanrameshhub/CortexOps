@@ -1,0 +1,23 @@
+{
+  "name": "llm-marketplace-unified-service",
+  "version": "1.1.0",
+  "description": "LLM-Marketplace Unified Service - Cloud Run deployment with Deprecation, Packaging, and Ecosystem agents",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "llm-marketplace",
+    "agents",
+    "cloud-run",
+    "ecosystem",
+    "phase-5"
+  ],
+  "author": "LLM-Marketplace Team",
+  "license": "MIT",
+  "dependencies": {}
+}

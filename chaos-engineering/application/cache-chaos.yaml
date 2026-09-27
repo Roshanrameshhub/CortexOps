@@ -1,0 +1,375 @@
+# Application-Level Cache Chaos Tests
+# Simulates Redis cache failures and degradation scenarios
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cache-chaos-scripts
+  namespace: chaos-testing
+data:
+  # Script to fill cache to capacity
+  cache-fill.lua: |
+    -- Fill Redis cache with random data
+    for i = 1, 100000 do
+      redis.call('SET', 'chaos:key:' .. i, string.rep('x', 1024))
+    end
+    return 'Cache filled'
+
+  # Script to simulate cache stampede
+  cache-stampede.lua: |
+    -- Delete hot keys to trigger cache stampede
+    local keys = redis.call('KEYS', 'hot:*')
+    for i, key in ipairs(keys) do
+      redis.call('DEL', key)
+    end
+    return #keys
+
+  # Script to test eviction policy
+  eviction-test.lua: |
+    -- Set many keys to test LRU eviction
+    for i = 1, 10000 do
+      redis.call('SET', 'evict:' .. i, i, 'EX', 60)
+    end
+    return 'Eviction test data created'
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cache-eviction-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: cache
+    scenario: eviction
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: chaos-injector
+          image: redis:7-alpine
+          env:
+            - name: REDIS_HOST
+              value: "redis.llm-marketplace.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+          volumeMounts:
+            - name: chaos-scripts
+              mountPath: /chaos
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Starting cache eviction chaos..."
+
+              # Get current maxmemory
+              MAXMEM=$(redis-cli -h $REDIS_HOST -p $REDIS_PORT CONFIG GET maxmemory | tail -1)
+              echo "Current maxmemory: $MAXMEM"
+
+              # Fill cache beyond capacity
+              echo "Filling cache to trigger evictions..."
+              for i in $(seq 1 50000); do
+                redis-cli -h $REDIS_HOST -p $REDIS_PORT SET "chaos:fill:$i" "$(head -c 1024 /dev/urandom | base64)" EX 300
+
+                if [ $((i % 1000)) -eq 0 ]; then
+                  USED=$(redis-cli -h $REDIS_HOST -p $REDIS_PORT INFO memory | grep used_memory: | cut -d: -f2 | tr -d '\r')
+                  EVICTED=$(redis-cli -h $REDIS_HOST -p $REDIS_PORT INFO stats | grep evicted_keys: | cut -d: -f2 | tr -d '\r')
+                  echo "Progress: $i keys | Used: $USED bytes | Evicted: $EVICTED keys"
+                fi
+              done
+
+              # Check eviction statistics
+              EVICTED_TOTAL=$(redis-cli -h $REDIS_HOST -p $REDIS_PORT INFO stats | grep evicted_keys: | cut -d: -f2 | tr -d '\r')
+              echo "Total evicted keys: $EVICTED_TOTAL"
+
+              echo "Cache eviction chaos completed"
+      volumes:
+        - name: chaos-scripts
+          configMap:
+            name: cache-chaos-scripts
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cache-stampede-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: cache
+    scenario: stampede
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: chaos-injector
+          image: redis:7-alpine
+          env:
+            - name: REDIS_HOST
+              value: "redis.llm-marketplace.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Starting cache stampede chaos..."
+
+              # Create hot keys
+              echo "Creating hot keys..."
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT SET "hot:services:popular" '{"id":"123","name":"Popular Service"}' EX 300
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT SET "hot:user:profile:1" '{"id":"1","name":"Admin"}' EX 300
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT SET "hot:recommendations:trending" '[1,2,3,4,5]' EX 300
+
+              echo "Hot keys created. Waiting 5 seconds..."
+              sleep 5
+
+              # Simulate cache stampede by deleting all hot keys simultaneously
+              echo "Triggering cache stampede by deleting hot keys..."
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT DEL "hot:services:popular" "hot:user:profile:1" "hot:recommendations:trending"
+
+              echo "Hot keys deleted. Monitoring backend load..."
+
+              # Monitor for 30 seconds
+              for i in $(seq 1 30); do
+                COMMANDS=$(redis-cli -h $REDIS_HOST -p $REDIS_PORT INFO stats | grep total_commands_processed: | cut -d: -f2 | tr -d '\r')
+                echo "[$i/30] Commands processed: $COMMANDS"
+                sleep 1
+              done
+
+              echo "Cache stampede chaos completed"
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cache-failover-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: cache
+    scenario: failover
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: chaos-sa
+      containers:
+        - name: chaos-orchestrator
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Starting Redis failover chaos..."
+
+              # Get master pod
+              MASTER_POD=$(kubectl get pods -n llm-marketplace \
+                -l app=redis,role=master \
+                -o jsonpath='{.items[0].metadata.name}')
+
+              echo "Redis master: $MASTER_POD"
+
+              # Record pre-failover metrics
+              echo "Recording pre-failover state..."
+              kubectl exec -n llm-marketplace $MASTER_POD -- \
+                redis-cli INFO replication
+
+              # Trigger failover
+              echo "Triggering manual failover..."
+              kubectl exec -n llm-marketplace $MASTER_POD -- \
+                redis-cli SHUTDOWN NOSAVE || true
+
+              # Wait for Sentinel to promote replica
+              echo "Waiting for Sentinel failover (30s)..."
+              sleep 30
+
+              # Verify new master
+              NEW_MASTER=$(kubectl get pods -n llm-marketplace \
+                -l app=redis,role=master \
+                -o jsonpath='{.items[0].metadata.name}')
+
+              echo "New Redis master: $NEW_MASTER"
+
+              # Verify connectivity
+              echo "Verifying Redis connectivity..."
+              kubectl exec -n llm-marketplace $NEW_MASTER -- \
+                redis-cli PING
+
+              # Check replication status
+              kubectl exec -n llm-marketplace $NEW_MASTER -- \
+                redis-cli INFO replication
+
+              echo "Redis failover chaos completed"
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cache-latency-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: cache
+    scenario: latency
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: latency-tester
+          image: redis:7-alpine
+          env:
+            - name: REDIS_HOST
+              value: "redis.llm-marketplace.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Starting cache latency chaos test..."
+
+              # Baseline latency test
+              echo "Measuring baseline latency..."
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT --latency-history -i 1 > /tmp/baseline_latency.txt &
+              BASELINE_PID=$!
+              sleep 10
+              kill $BASELINE_PID || true
+
+              # Generate heavy load
+              echo "Generating heavy cache load..."
+              for i in $(seq 1 10); do
+                (
+                  for j in $(seq 1 1000); do
+                    redis-cli -h $REDIS_HOST -p $REDIS_PORT GET "chaos:key:$j" > /dev/null
+                    redis-cli -h $REDIS_HOST -p $REDIS_PORT SET "chaos:key:$j" "value$j" > /dev/null
+                  done
+                ) &
+              done
+
+              # Measure latency under load
+              echo "Measuring latency under load..."
+              redis-cli -h $REDIS_HOST -p $REDIS_PORT --latency-history -i 1 > /tmp/load_latency.txt &
+              LOAD_PID=$!
+              sleep 10
+              kill $LOAD_PID || true
+
+              wait
+
+              # Analyze results
+              echo "=== Baseline Latency ==="
+              cat /tmp/baseline_latency.txt | head -5
+              echo ""
+              echo "=== Under Load Latency ==="
+              cat /tmp/load_latency.txt | head -5
+
+              echo "Cache latency chaos test completed"
+
+---
+# Cache Persistence Failure
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cache-persistence-chaos
+  namespace: chaos-testing
+  labels:
+    chaos-type: cache
+    scenario: persistence-failure
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: chaos-injector
+          image: redis:7-alpine
+          env:
+            - name: REDIS_HOST
+              value: "redis.llm-marketplace.svc.cluster.local"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Starting cache persistence chaos..."
+
+              # Write data to cache
+              echo "Writing test data to cache..."
+              for i in $(seq 1 1000); do
+                redis-cli -h $REDIS_HOST SET "persist:test:$i" "value$i"
+              done
+
+              # Trigger save
+              echo "Triggering background save..."
+              redis-cli -h $REDIS_HOST BGSAVE
+
+              # Check save status
+              sleep 2
+              LASTSAVE=$(redis-cli -h $REDIS_HOST LASTSAVE)
+              echo "Last save timestamp: $LASTSAVE"
+
+              # Simulate persistence failure by filling disk
+              echo "Simulating disk full scenario..."
+              # (Would use IOChaos here to fill disk)
+
+              # Try to save again
+              redis-cli -h $REDIS_HOST BGSAVE || echo "Save failed as expected"
+
+              # Check for errors
+              INFO=$(redis-cli -h $REDIS_HOST INFO persistence)
+              echo "Persistence info:"
+              echo "$INFO"
+
+              echo "Cache persistence chaos completed"
+
+---
+# Memory Pressure on Cache
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cache-memory-pressure
+  namespace: chaos-testing
+spec:
+  schedule: "0 */4 * * *"  # Every 4 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: memory-pressure
+              image: redis:7-alpine
+              env:
+                - name: REDIS_HOST
+                  value: "redis.llm-marketplace.svc.cluster.local"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "Testing cache under memory pressure..."
+
+                  # Get memory info
+                  MEMORY_INFO=$(redis-cli -h $REDIS_HOST INFO memory)
+                  echo "Initial memory state:"
+                  echo "$MEMORY_INFO" | grep -E 'used_memory|maxmemory|mem_fragmentation'
+
+                  # Generate large objects
+                  echo "Creating large cached objects..."
+                  for i in $(seq 1 100); do
+                    LARGE_VALUE=$(head -c 10485760 /dev/urandom | base64)  # 10MB
+                    redis-cli -h $REDIS_HOST SET "large:object:$i" "$LARGE_VALUE" EX 300
+                  done
+
+                  # Monitor memory
+                  MEMORY_INFO=$(redis-cli -h $REDIS_HOST INFO memory)
+                  echo "Memory state after load:"
+                  echo "$MEMORY_INFO" | grep -E 'used_memory|maxmemory|mem_fragmentation'
+
+                  # Check for OOM
+                  OOM_COUNT=$(redis-cli -h $REDIS_HOST INFO stats | grep rejected_connections: | cut -d: -f2)
+                  echo "Rejected connections (OOM): $OOM_COUNT"
+
+                  echo "Memory pressure test completed"

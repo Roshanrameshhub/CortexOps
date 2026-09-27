@@ -1,0 +1,49 @@
+server:
+  port: 50051
+  host: "0.0.0.0"
+  read_timeout: 30s
+  write_timeout: 30s
+  max_connections: 1000
+  enable_reflection: true
+  enable_health_check: true
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: postgres
+  database: policy_engine
+  ssl_mode: disable
+  max_connections: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+
+cache:
+  enabled: true
+  ttl: 5m
+  max_size: 1000
+  cleanup_interval: 10m
+
+observability:
+  metrics:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+  tracing:
+    enabled: false
+    jaeger_url: http://localhost:14268/api/traces
+    service_name: policy-engine
+    sampling_rate: 0.1
+
+  logging:
+    level: info
+    format: json
+    output: stdout
+    time_format: "2006-01-02T15:04:05Z07:00"
+
+policies:
+  default_version: "1.0.0"
+  reload_interval: 5m
+  enable_auto_reload: true
+  validation_timeout: 5s

@@ -1,0 +1,55 @@
+{
+  "name": "@llm-marketplace/deprecation-agent",
+  "version": "1.0.0",
+  "description": "Deprecation Agent for LLM-Marketplace - Lifecycle Management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "deprecation-agent": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "deploy": "gcloud functions deploy deprecation-agent --runtime nodejs20 --trigger-http --entry-point=handler"
+  },
+  "dependencies": {
+    "@llm-marketplace/agentics-contracts": "^1.0.0",
+    "zod": "^3.22.4",
+    "winston": "^3.11.0",
+    "uuid": "^9.0.0",
+    "commander": "^11.1.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.3.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.0",
+    "eslint": "^8.55.0",
+    "@google-cloud/functions-framework": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "llm-marketplace",
+    "deprecation",
+    "lifecycle",
+    "agent",
+    "google-cloud-functions"
+  ],
+  "author": "LLM-Marketplace Team",
+  "license": "MIT"
+}

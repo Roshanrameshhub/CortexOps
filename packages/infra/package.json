@@ -1,0 +1,120 @@
+{
+  "name": "@llm-marketplace/infra",
+  "version": "1.0.0",
+  "description": "Shared infrastructure utilities for the LLM Marketplace platform - configuration, logging, tracing, caching, retry, and error handling",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "llm-marketplace",
+    "infra",
+    "infrastructure",
+    "logging",
+    "tracing",
+    "caching",
+    "configuration",
+    "error-handling",
+    "retry",
+    "rate-limiting"
+  ],
+  "author": "LLM Marketplace Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roshanrameshhub/inferops.git",
+    "directory": "packages/infra"
+  },
+  "bugs": {
+    "url": "https://github.com/roshanrameshhub/inferops/issues"
+  },
+  "homepage": "https://github.com/roshanrameshhub/inferops#readme",
+  "dependencies": {
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/exporter-jaeger": "^1.19.0",
+    "@opentelemetry/instrumentation": "^0.46.0",
+    "@opentelemetry/sdk-trace-node": "^1.19.0",
+    "@opentelemetry/semantic-conventions": "^1.19.0",
+    "axios": "^1.6.5",
+    "axios-retry": "^4.0.0",
+    "dotenv": "^16.4.1",
+    "ioredis": "^5.3.2",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.11.5",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.5",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js",
+      "require": "./dist/config/index.js"
+    },
+    "./logging": {
+      "types": "./dist/logging/index.d.ts",
+      "import": "./dist/logging/index.js",
+      "require": "./dist/logging/index.js"
+    },
+    "./tracing": {
+      "types": "./dist/tracing/index.d.ts",
+      "import": "./dist/tracing/index.js",
+      "require": "./dist/tracing/index.js"
+    },
+    "./cache": {
+      "types": "./dist/cache/index.d.ts",
+      "import": "./dist/cache/index.js",
+      "require": "./dist/cache/index.js"
+    },
+    "./retry": {
+      "types": "./dist/retry/index.d.ts",
+      "import": "./dist/retry/index.js",
+      "require": "./dist/retry/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "import": "./dist/errors/index.js",
+      "require": "./dist/errors/index.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/rate-limit/index.d.ts",
+      "import": "./dist/rate-limit/index.js",
+      "require": "./dist/rate-limit/index.js"
+    }
+  }
+}

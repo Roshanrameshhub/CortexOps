@@ -1,0 +1,206 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-recommendations
+  namespace: llm-marketplace
+  labels:
+    app: ml-recommendations
+    version: v1.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ml-recommendations
+  template:
+    metadata:
+      labels:
+        app: ml-recommendations
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ml-recommendations
+      containers:
+      - name: ml-recommendations
+        image: your-registry/ml-recommendations:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: ml-recommendations-secrets
+              key: database-url
+        - name: MODEL_PATH
+          value: "/app/models"
+        - name: WORKERS
+          value: "4"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: models
+          mountPath: /app/models
+          readOnly: true
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: ml-recommendations-models-pvc
+      - name: config
+        configMap:
+          name: ml-recommendations-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ml-recommendations
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-recommendations-service
+  namespace: llm-marketplace
+  labels:
+    app: ml-recommendations
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: ml-recommendations
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ml-recommendations
+  namespace: llm-marketplace
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-recommendations-config
+  namespace: llm-marketplace
+data:
+  model_config.json: |
+    {
+      "svd": {
+        "enabled": true,
+        "n_factors": 50,
+        "weight": 0.3
+      },
+      "als": {
+        "enabled": true,
+        "factors": 50,
+        "weight": 0.3
+      },
+      "nmf": {
+        "enabled": true,
+        "n_components": 50,
+        "weight": 0.2
+      },
+      "hybrid": {
+        "enabled": true,
+        "diversity_weight": 0.1,
+        "novelty_weight": 0.1
+      },
+      "cache": {
+        "ttl": 3600,
+        "enabled": true
+      }
+    }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-recommendations-models-pvc
+  namespace: llm-marketplace
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ml-recommendations-hpa
+  namespace: llm-marketplace
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ml-recommendations
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60

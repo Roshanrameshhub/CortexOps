@@ -1,0 +1,229 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: inferops-postgres
+    environment:
+      POSTGRES_DB: llm_marketplace
+      POSTGRES_USER: marketplace_user
+      POSTGRES_PASSWORD: marketplace_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace_user -d llm_marketplace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - inferops-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: inferops-redis
+    command: redis-server --appendonly yes --requirepass redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - inferops-network
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+    container_name: inferops-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - inferops-network
+
+  # Apache Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    container_name: inferops-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - inferops-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.3
+    container_name: inferops-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - inferops-network
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: inferops-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    networks:
+      - inferops-network
+
+  # Prometheus for Metrics
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: inferops-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - inferops-network
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: inferops-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - inferops-network
+
+  # Publishing Service (TypeScript)
+  publishing-service:
+    build:
+      context: ./services/publishing
+      dockerfile: Dockerfile
+    container_name: inferops-publishing
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://marketplace_user:marketplace_password@postgres:5432/llm_marketplace
+      REDIS_URL: redis://:redis_password@redis:6379
+      KAFKA_BROKERS: kafka:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - elasticsearch
+      - jaeger
+    volumes:
+      - ./services/publishing:/app
+      - /app/node_modules
+    command: npm run dev
+    networks:
+      - inferops-network
+
+  # Admin Service (Python/FastAPI)
+  admin-service:
+    build:
+      context: ./services/admin
+      dockerfile: Dockerfile
+    container_name: inferops-admin
+    environment:
+      ENVIRONMENT: development
+      PORT: 3004
+      DATABASE_URL: postgresql://marketplace_user:marketplace_password@postgres:5432/llm_marketplace
+      REDIS_URL: redis://:redis_password@redis:6379
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "3004:3004"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    volumes:
+      - ./services/admin:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 3004 --reload
+    networks:
+      - inferops-network
+
+networks:
+  inferops-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  prometheus_data:
+  grafana_data:

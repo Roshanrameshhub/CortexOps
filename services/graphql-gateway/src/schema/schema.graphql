@@ -1,0 +1,571 @@
+# Import common types
+#import common/scalars.graphql
+#import common/pagination.graphql
+#import common/errors.graphql
+#import common/directives.graphql
+
+# Import service types
+#import publishing/types.graphql
+#import discovery/types.graphql
+#import consumption/types.graphql
+#import admin/types.graphql
+
+"""
+Root Query type
+"""
+type Query {
+  # ============================================================
+  # Publishing Service
+  # ============================================================
+
+  """
+  Get a service by ID
+  """
+  service(
+    """
+    Service ID
+    """
+    id: ID!
+  ): Service @cacheControl(maxAge: 60)
+
+  """
+  List services with pagination and filtering
+  """
+  services(
+    """
+    Filter criteria
+    """
+    filter: ServiceFilter
+
+    """
+    Pagination parameters
+    """
+    pagination: PaginationInput
+  ): ServiceConnection! @rateLimit(limit: 100, window: 60)
+
+  """
+  Validate service data
+  """
+  validateService(
+    """
+    Service data to validate
+    """
+    input: CreateServiceInput!
+  ): ValidationResult!
+
+  # ============================================================
+  # Discovery Service
+  # ============================================================
+
+  """
+  Search for services
+  """
+  searchServices(
+    """
+    Search query
+    """
+    query: String!
+
+    """
+    Search filters
+    """
+    filter: SearchFilter
+
+    """
+    Pagination parameters
+    """
+    pagination: PaginationInput
+  ): SearchResult! @rateLimit(limit: 200, window: 60)
+
+  """
+  Get personalized recommendations
+  """
+  recommendations(
+    """
+    User ID (optional, defaults to current user)
+    """
+    userId: ID
+
+    """
+    Number of recommendations
+    """
+    limit: PositiveInt = 10
+  ): [Service!]! @auth @cacheControl(maxAge: 300)
+
+  """
+  Get all categories
+  """
+  categories: [Category!]! @cacheControl(maxAge: 3600)
+
+  """
+  Get popular tags
+  """
+  tags(
+    """
+    Maximum number of tags to return
+    """
+    limit: PositiveInt = 50
+  ): [Tag!]! @cacheControl(maxAge: 1800)
+
+  """
+  Get services by category
+  """
+  servicesByCategory(
+    """
+    Category ID or name
+    """
+    category: String!
+
+    """
+    Pagination parameters
+    """
+    pagination: PaginationInput
+  ): ServiceConnection! @cacheControl(maxAge: 300)
+
+  # ============================================================
+  # Consumption Service
+  # ============================================================
+
+  """
+  Get usage metrics for a service
+  """
+  usage(
+    """
+    Service ID
+    """
+    serviceId: ID!
+
+    """
+    Time range for metrics
+    """
+    timeRange: TimeRangeInput!
+  ): UsageMetrics! @auth
+
+  """
+  Get quota information
+  """
+  quota(
+    """
+    Service ID
+    """
+    serviceId: ID!
+  ): Quota! @auth
+
+  """
+  Get SLA metrics
+  """
+  sla(
+    """
+    Service ID
+    """
+    serviceId: ID!
+
+    """
+    Time period (optional)
+    """
+    period: TimeRangeInput
+  ): SLAMetrics! @auth
+
+  """
+  Get billing information
+  """
+  billing(
+    """
+    Service ID
+    """
+    serviceId: ID!
+
+    """
+    Billing period (optional)
+    """
+    period: TimeRangeInput
+  ): BillingInfo! @auth
+
+  # ============================================================
+  # Admin Service
+  # ============================================================
+
+  """
+  Get platform analytics
+  """
+  analytics(
+    """
+    Time period
+    """
+    period: TimeRangeInput!
+  ): Analytics! @requireRole(role: ADMIN)
+
+  """
+  Get audit logs
+  """
+  auditLogs(
+    """
+    Filter criteria
+    """
+    filter: AuditLogFilter
+
+    """
+    Pagination parameters
+    """
+    pagination: PaginationInput
+  ): AuditLogConnection! @requireRole(role: ADMIN)
+
+  """
+  Get platform statistics
+  """
+  platformStats: PlatformStats! @requireRole(role: ADMIN)
+
+  # ============================================================
+  # Health & Meta
+  # ============================================================
+
+  """
+  Health check
+  """
+  health: HealthStatus!
+
+  """
+  API version information
+  """
+  version: VersionInfo!
+}
+
+"""
+Root Mutation type
+"""
+type Mutation {
+  # ============================================================
+  # Publishing Service
+  # ============================================================
+
+  """
+  Create a new service
+  """
+  createService(
+    """
+    Service data
+    """
+    input: CreateServiceInput!
+  ): ServiceResult! @auth @rateLimit(limit: 10, window: 3600)
+
+  """
+  Update an existing service
+  """
+  updateService(
+    """
+    Service ID
+    """
+    id: ID!
+
+    """
+    Update data
+    """
+    input: UpdateServiceInput!
+  ): ServiceResult! @auth
+
+  """
+  Delete a service
+  """
+  deleteService(
+    """
+    Service ID
+    """
+    id: ID!
+  ): DeleteResult! @auth
+
+  # ============================================================
+  # Consumption Service
+  # ============================================================
+
+  """
+  Track service usage
+  """
+  trackUsage(
+    """
+    Service ID
+    """
+    serviceId: ID!
+
+    """
+    Usage data
+    """
+    input: TrackUsageInput!
+  ): TrackUsageResult! @auth
+
+  # ============================================================
+  # Admin Service
+  # ============================================================
+
+  """
+  Approve a service
+  """
+  approveService(
+    """
+    Service ID
+    """
+    id: ID!
+
+    """
+    Approval notes
+    """
+    notes: String
+  ): ApprovalResult! @requireRole(role: ADMIN)
+
+  """
+  Reject a service
+  """
+  rejectService(
+    """
+    Service ID
+    """
+    id: ID!
+
+    """
+    Rejection reason
+    """
+    reason: String!
+  ): RejectionResult! @requireRole(role: ADMIN)
+
+  """
+  Manage users
+  """
+  manageUser(
+    """
+    User ID
+    """
+    userId: ID!
+
+    """
+    Action to perform
+    """
+    action: UserAction!
+
+    """
+    Additional data
+    """
+    data: JSON
+  ): UserManagementResult! @requireRole(role: ADMIN)
+}
+
+"""
+Root Subscription type for real-time updates
+"""
+type Subscription {
+  # ============================================================
+  # Service Updates
+  # ============================================================
+
+  """
+  Subscribe to service updates
+  """
+  serviceUpdated(
+    """
+    Service ID to watch
+    """
+    id: ID!
+  ): Service! @auth
+
+  """
+  Subscribe to service status changes
+  """
+  serviceStatusChanged(
+    """
+    Service ID to watch
+    """
+    id: ID!
+  ): ServiceStatusUpdate! @auth
+
+  # ============================================================
+  # Usage Monitoring
+  # ============================================================
+
+  """
+  Subscribe to usage updates
+  """
+  usageUpdated(
+    """
+    Service ID to monitor
+    """
+    serviceId: ID!
+  ): UsageMetrics! @auth
+
+  """
+  Subscribe to quota updates
+  """
+  quotaUpdated(
+    """
+    Service ID to monitor
+    """
+    serviceId: ID!
+  ): Quota! @auth
+
+  # ============================================================
+  # Notifications
+  # ============================================================
+
+  """
+  Subscribe to user notifications
+  """
+  notifications: Notification! @auth
+}
+
+# ============================================================
+# Additional Types
+# ============================================================
+
+"""
+Health status
+"""
+type HealthStatus {
+  """
+  Overall health status
+  """
+  status: String!
+
+  """
+  API version
+  """
+  version: String!
+
+  """
+  Uptime in seconds
+  """
+  uptime: Int!
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  Service-specific health checks
+  """
+  services: [ServiceHealth!]!
+}
+
+"""
+Service health
+"""
+type ServiceHealth {
+  """
+  Service name
+  """
+  name: String!
+
+  """
+  Health status
+  """
+  status: String!
+
+  """
+  Response time in milliseconds
+  """
+  responseTime: Int
+}
+
+"""
+Version information
+"""
+type VersionInfo {
+  """
+  API version
+  """
+  version: String!
+
+  """
+  Build date
+  """
+  buildDate: DateTime!
+
+  """
+  Environment
+  """
+  environment: String!
+
+  """
+  Git commit hash
+  """
+  commit: String
+}
+
+"""
+Service status update
+"""
+type ServiceStatusUpdate {
+  """
+  Service ID
+  """
+  id: ID!
+
+  """
+  Previous status
+  """
+  previousStatus: ServiceStatus!
+
+  """
+  New status
+  """
+  newStatus: ServiceStatus!
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  Notes
+  """
+  notes: String
+}
+
+"""
+Notification
+"""
+type Notification {
+  """
+  Notification ID
+  """
+  id: ID!
+
+  """
+  Notification type
+  """
+  type: NotificationType!
+
+  """
+  Title
+  """
+  title: String!
+
+  """
+  Message
+  """
+  message: String!
+
+  """
+  Additional data
+  """
+  data: JSON
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  Read status
+  """
+  read: Boolean!
+}
+
+"""
+Notification type
+"""
+enum NotificationType {
+  SERVICE_APPROVED
+  SERVICE_REJECTED
+  QUOTA_WARNING
+  QUOTA_EXCEEDED
+  USAGE_ALERT
+  SYSTEM_ANNOUNCEMENT
+}

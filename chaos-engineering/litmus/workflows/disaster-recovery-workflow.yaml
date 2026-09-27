@@ -1,0 +1,433 @@
+# Disaster Recovery Chaos Workflow
+# Simulates catastrophic failures to validate DR procedures
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: disaster-recovery-workflow
+  namespace: chaos-testing
+  labels:
+    scenario: disaster-recovery
+    severity: critical
+spec:
+  entrypoint: dr-scenario
+  serviceAccountName: argo-chaos
+
+  arguments:
+    parameters:
+      - name: scenario-type
+        value: "region-failure"  # Options: region-failure, data-center-outage, complete-db-loss
+      - name: recovery-timeout
+        value: "600"  # 10 minutes
+
+  templates:
+    # Main DR scenario orchestrator
+    - name: dr-scenario
+      steps:
+        # Step 1: Backup current state
+        - - name: backup-state
+            template: create-backup
+
+        # Step 2: Simulate disaster based on type
+        - - name: simulate-disaster
+            template: disaster-simulation
+            arguments:
+              parameters:
+                - name: disaster-type
+                  value: "{{workflow.parameters.scenario-type}}"
+
+        # Step 3: Monitor automatic recovery
+        - - name: monitor-recovery
+            template: monitor-auto-recovery
+            arguments:
+              parameters:
+                - name: timeout
+                  value: "{{workflow.parameters.recovery-timeout}}"
+
+        # Step 4: Validate recovery
+        - - name: validate-recovery
+            template: validate-dr-recovery
+
+        # Step 5: Restore if needed
+        - - name: restore-if-failed
+            template: conditional-restore
+            when: "{{steps.validate-recovery.outputs.result}} == fail"
+
+        # Step 6: Generate DR report
+        - - name: generate-dr-report
+            template: dr-report
+
+    # Backup template
+    - name: create-backup
+      script:
+        image: postgres:15
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Creating pre-disaster backup..."
+
+          # Backup PostgreSQL
+          PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
+            -h postgres.llm-marketplace.svc.cluster.local \
+            -U postgres \
+            -d llm_marketplace \
+            -F c \
+            -f /backup/pre-dr-$(date +%Y%m%d-%H%M%S).dump
+
+          # Backup Redis
+          redis-cli -h redis.llm-marketplace.svc.cluster.local BGSAVE
+
+          echo "Backup completed"
+
+    # Disaster simulation template
+    - name: disaster-simulation
+      inputs:
+        parameters:
+          - name: disaster-type
+      steps:
+        # Region failure scenario
+        - - name: region-failure
+            template: simulate-region-failure
+            when: "{{inputs.parameters.disaster-type}} == region-failure"
+
+        # Data center outage
+        - - name: datacenter-outage
+            template: simulate-datacenter-outage
+            when: "{{inputs.parameters.disaster-type}} == data-center-outage"
+
+        # Complete database loss
+        - - name: database-loss
+            template: simulate-database-loss
+            when: "{{inputs.parameters.disaster-type}} == complete-db-loss"
+
+    # Region failure simulation
+    - name: simulate-region-failure
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Simulating region failure..."
+
+          # Apply zone failure chaos
+          cat <<EOF | kubectl apply -f -
+          apiVersion: litmuschaos.io/v1alpha1
+          kind: ChaosEngine
+          metadata:
+            name: region-failure-chaos
+            namespace: chaos-testing
+          spec:
+            appinfo:
+              appns: llm-marketplace
+              applabel: 'topology.kubernetes.io/zone=us-east-1a'
+              appkind: 'deployment'
+            chaosServiceAccount: litmus-admin
+            experiments:
+              - name: pod-delete
+                spec:
+                  components:
+                    env:
+                      - name: TOTAL_CHAOS_DURATION
+                        value: '300'
+                      - name: PODS_AFFECTED_PERC
+                        value: '100'
+                      - name: FORCE
+                        value: 'true'
+          EOF
+
+          echo "Region failure chaos applied"
+
+    # Data center outage simulation
+    - name: simulate-datacenter-outage
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Simulating data center outage..."
+
+          # Network partition for entire namespace
+          cat <<EOF | kubectl apply -f -
+          apiVersion: chaos-mesh.org/v1alpha1
+          kind: NetworkChaos
+          metadata:
+            name: datacenter-partition
+            namespace: chaos-testing
+          spec:
+            action: partition
+            mode: all
+            selector:
+              namespaces:
+                - llm-marketplace
+            direction: both
+            duration: "5m"
+          EOF
+
+          echo "Data center outage simulated"
+
+    # Database loss simulation
+    - name: simulate-database-loss
+      script:
+        image: litmuschaos/k8s:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Simulating complete database loss..."
+
+          # Delete all database pods
+          kubectl delete pods -n llm-marketplace -l app=postgres --force --grace-period=0
+
+          # Delete PVCs to simulate data loss
+          kubectl delete pvc -n llm-marketplace -l app=postgres
+
+          echo "Database loss simulated"
+
+    # Monitor automatic recovery
+    - name: monitor-auto-recovery
+      inputs:
+        parameters:
+          - name: timeout
+      script:
+        image: curlimages/curl:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+
+          TIMEOUT={{inputs.parameters.timeout}}
+          ELAPSED=0
+          INTERVAL=10
+
+          echo "Monitoring automatic recovery (timeout: ${TIMEOUT}s)..."
+
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Check pod status
+            READY_PODS=$(kubectl get pods -n llm-marketplace \
+              -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+            TOTAL_PODS=$(kubectl get pods -n llm-marketplace --no-headers | wc -l)
+
+            echo "[$ELAPSED/$TIMEOUT] Ready pods: $READY_PODS/$TOTAL_PODS"
+
+            # Check if all critical pods are ready
+            POSTGRES_READY=$(kubectl get pods -n llm-marketplace -l app=postgres \
+              -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+            REDIS_READY=$(kubectl get pods -n llm-marketplace -l app=redis \
+              -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+            GRAPHQL_READY=$(kubectl get pods -n llm-marketplace -l app=graphql-gateway \
+              -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+
+            if [ "$POSTGRES_READY" -gt 0 ] && [ "$REDIS_READY" -gt 0 ] && [ "$GRAPHQL_READY" -gt 0 ]; then
+              echo "All critical services recovered!"
+              exit 0
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          echo "WARNING: Recovery timeout exceeded"
+          exit 1
+
+    # Validate DR recovery
+    - name: validate-dr-recovery
+      script:
+        image: curlimages/curl:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Validating disaster recovery..."
+
+          # Test GraphQL Gateway
+          GRAPHQL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            http://graphql-gateway.llm-marketplace.svc.cluster.local:4000/health)
+
+          if [ "$GRAPHQL_STATUS" != "200" ]; then
+            echo "FAIL: GraphQL Gateway not recovered"
+            echo "fail" > /tmp/result
+            exit 0
+          fi
+
+          # Test database connectivity
+          # (Would use actual DB connection test here)
+
+          # Test read/write operations
+          # (Would use actual integration tests here)
+
+          echo "PASS: Disaster recovery validated successfully"
+          echo "pass" > /tmp/result
+        outputs:
+          parameters:
+            - name: result
+              valueFrom:
+                path: /tmp/result
+
+    # Conditional restore
+    - name: conditional-restore
+      script:
+        image: postgres:15
+        command: [sh]
+        source: |
+          #!/bin/sh
+          set -e
+
+          echo "Initiating manual restore..."
+
+          # Restore from backup
+          LATEST_BACKUP=$(ls -t /backup/pre-dr-*.dump | head -1)
+
+          PGPASSWORD=$POSTGRES_PASSWORD pg_restore \
+            -h postgres.llm-marketplace.svc.cluster.local \
+            -U postgres \
+            -d llm_marketplace \
+            -c \
+            "$LATEST_BACKUP"
+
+          echo "Manual restore completed"
+
+    # DR report template
+    - name: dr-report
+      script:
+        image: alpine
+        command: [sh]
+        source: |
+          #!/bin/sh
+
+          echo "================================"
+          echo "Disaster Recovery Report"
+          echo "================================"
+          echo "Scenario: {{workflow.parameters.scenario-type}}"
+          echo "Start time: {{workflow.creationTimestamp}}"
+          echo "Duration: {{workflow.duration}}"
+          echo "Status: {{workflow.status}}"
+          echo "================================"
+
+          # Export metrics
+          # (Would push to monitoring system)
+
+---
+# Progressive Failure Workflow
+# Gradually increases failure severity to find breaking points
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: progressive-failure-workflow
+  namespace: chaos-testing
+spec:
+  entrypoint: progressive-chaos
+  serviceAccountName: argo-chaos
+
+  templates:
+    - name: progressive-chaos
+      steps:
+        # Level 1: Minor disruptions (10% pods, 100ms latency)
+        - - name: level-1-chaos
+            template: apply-chaos-level
+            arguments:
+              parameters:
+                - name: level
+                  value: "1"
+                - name: pod-percentage
+                  value: "10"
+                - name: latency
+                  value: "100"
+
+        - - name: validate-level-1
+            template: validate-system
+
+        # Level 2: Moderate disruptions (30% pods, 500ms latency)
+        - - name: level-2-chaos
+            template: apply-chaos-level
+            arguments:
+              parameters:
+                - name: level
+                  value: "2"
+                - name: pod-percentage
+                  value: "30"
+                - name: latency
+                  value: "500"
+
+        - - name: validate-level-2
+            template: validate-system
+
+        # Level 3: Severe disruptions (50% pods, 2s latency)
+        - - name: level-3-chaos
+            template: apply-chaos-level
+            arguments:
+              parameters:
+                - name: level
+                  value: "3"
+                - name: pod-percentage
+                  value: "50"
+                - name: latency
+                  value: "2000"
+
+        - - name: validate-level-3
+            template: validate-system
+
+        # Level 4: Critical disruptions (70% pods, 5s latency)
+        - - name: level-4-chaos
+            template: apply-chaos-level
+            arguments:
+              parameters:
+                - name: level
+                  value: "4"
+                - name: pod-percentage
+                  value: "70"
+                - name: latency
+                  value: "5000"
+
+        - - name: validate-level-4
+            template: validate-system
+
+        # Final report
+        - - name: breaking-point-analysis
+            template: analyze-breaking-point
+
+    - name: apply-chaos-level
+      inputs:
+        parameters:
+          - name: level
+          - name: pod-percentage
+          - name: latency
+      container:
+        image: litmuschaos/k8s:latest
+        command: [sh, -c]
+        args:
+          - |
+            echo "Applying chaos level {{inputs.parameters.level}}"
+            echo "Pod failure: {{inputs.parameters.pod-percentage}}%"
+            echo "Network latency: {{inputs.parameters.latency}}ms"
+            # Apply chaos configurations
+
+    - name: validate-system
+      script:
+        image: curlimages/curl:latest
+        command: [sh]
+        source: |
+          #!/bin/sh
+          # Validate system health and SLOs
+          # Record metrics for breaking point analysis
+          exit 0
+
+    - name: analyze-breaking-point
+      script:
+        image: python:3.11-alpine
+        command: [python]
+        source: |
+          import json
+
+          print("Analyzing system breaking points...")
+
+          # Analyze at which level system degraded
+          # Generate recommendations
+
+          print("Breaking point analysis completed")

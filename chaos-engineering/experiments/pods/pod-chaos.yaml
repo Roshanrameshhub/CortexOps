@@ -1,0 +1,155 @@
+# Pod Chaos Experiments
+# Tests pod failure and recovery mechanisms
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: random-pod-kill
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: pod
+    severity: high
+spec:
+  action: pod-kill
+  mode: fixed
+  value: "1"
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      tier: backend
+      chaos-ready: "true"
+  scheduler:
+    cron: "@every 15m"
+  duration: "10s"
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: graphql-pod-kill
+  namespace: chaos-testing
+spec:
+  action: pod-kill
+  mode: fixed-percent
+  value: "30"  # Kill 30% of pods
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: graphql-gateway
+  gracePeriod: 0  # Force kill
+  duration: "30s"
+
+---
+# Pod failure - make pod unresponsive
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure
+  namespace: chaos-testing
+spec:
+  action: pod-failure
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: ml-recommendations
+  duration: "5m"
+
+---
+# Container kill - kill specific container in pod
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: container-kill
+  namespace: chaos-testing
+spec:
+  action: container-kill
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: tenant-management
+  containerNames:
+    - tenant-management  # Target specific container
+  duration: "1m"
+
+---
+# Kill multiple pods simultaneously
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: multi-pod-kill
+  namespace: chaos-testing
+spec:
+  action: pod-kill
+  mode: fixed
+  value: "2"
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      tier: backend
+  duration: "15s"
+  scheduler:
+    cron: "@every 30m"
+
+---
+# StatefulSet pod kill - test ordered recovery
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: statefulset-pod-kill
+  namespace: chaos-testing
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: postgres
+      statefulset.kubernetes.io/pod-name: postgres-0
+  duration: "10s"
+
+---
+# Sidecar container failure
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: sidecar-failure
+  namespace: chaos-testing
+spec:
+  action: container-kill
+  mode: all
+  selector:
+    namespaces:
+      - llm-marketplace
+  containerNames:
+    - istio-proxy  # Kill service mesh sidecar
+  duration: "2m"
+
+---
+# Progressive pod kills - cascading failure simulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: progressive-pod-kill
+  namespace: chaos-testing
+spec:
+  schedule: "@every 1h"
+  type: PodChaos
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  podChaos:
+    action: pod-kill
+    mode: fixed
+    value: "1"
+    selector:
+      namespaces:
+        - llm-marketplace
+    duration: "10s"

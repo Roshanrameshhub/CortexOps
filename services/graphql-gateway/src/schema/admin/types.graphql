@@ -1,0 +1,1035 @@
+"""
+Platform analytics
+"""
+type Analytics {
+  """
+  Time period for analytics
+  """
+  period: TimePeriod!
+
+  """
+  Platform-wide metrics
+  """
+  platform: PlatformMetrics!
+
+  """
+  Service metrics
+  """
+  services: ServiceMetrics!
+
+  """
+  User metrics
+  """
+  users: UserMetrics!
+
+  """
+  Revenue metrics
+  """
+  revenue: RevenueMetrics!
+
+  """
+  Top services
+  """
+  topServices: [ServiceRanking!]!
+
+  """
+  Top providers
+  """
+  topProviders: [ProviderRanking!]!
+
+  """
+  Trending categories
+  """
+  trendingCategories: [CategoryTrend!]!
+
+  """
+  Geographic distribution
+  """
+  geographic: [GeographicMetric!]!
+}
+
+"""
+Platform-wide metrics
+"""
+type PlatformMetrics {
+  """
+  Total API requests
+  """
+  totalRequests: NonNegativeInt!
+
+  """
+  Total active users
+  """
+  activeUsers: NonNegativeInt!
+
+  """
+  Total services
+  """
+  totalServices: NonNegativeInt!
+
+  """
+  Average response time (milliseconds)
+  """
+  avgResponseTime: NonNegativeFloat!
+
+  """
+  Error rate (0-1)
+  """
+  errorRate: NonNegativeFloat!
+
+  """
+  Uptime percentage (0-100)
+  """
+  uptime: NonNegativeFloat!
+
+  """
+  Data transferred (bytes)
+  """
+  dataTransferred: NonNegativeInt!
+
+  """
+  Growth rate compared to previous period
+  """
+  growthRate: Float!
+}
+
+"""
+Service metrics
+"""
+type ServiceMetrics {
+  """
+  Total services
+  """
+  total: NonNegativeInt!
+
+  """
+  Active services
+  """
+  active: NonNegativeInt!
+
+  """
+  Pending approval
+  """
+  pending: NonNegativeInt!
+
+  """
+  Deprecated services
+  """
+  deprecated: NonNegativeInt!
+
+  """
+  New services in period
+  """
+  newServices: NonNegativeInt!
+
+  """
+  Average rating
+  """
+  avgRating: NonNegativeFloat!
+
+  """
+  Services by category
+  """
+  byCategory: [CategoryCount!]!
+
+  """
+  Services by pricing model
+  """
+  byPricingModel: [PricingModelCount!]!
+}
+
+"""
+Category count
+"""
+type CategoryCount {
+  """
+  Category name
+  """
+  category: String!
+
+  """
+  Count
+  """
+  count: NonNegativeInt!
+
+  """
+  Percentage of total
+  """
+  percentage: NonNegativeFloat!
+}
+
+"""
+Pricing model count
+"""
+type PricingModelCount {
+  """
+  Pricing model
+  """
+  model: PricingModel!
+
+  """
+  Count
+  """
+  count: NonNegativeInt!
+
+  """
+  Percentage of total
+  """
+  percentage: NonNegativeFloat!
+}
+
+"""
+User metrics
+"""
+type UserMetrics {
+  """
+  Total users
+  """
+  total: NonNegativeInt!
+
+  """
+  Active users in period
+  """
+  active: NonNegativeInt!
+
+  """
+  New users in period
+  """
+  newUsers: NonNegativeInt!
+
+  """
+  Users by role
+  """
+  byRole: [RoleCount!]!
+
+  """
+  Average requests per user
+  """
+  avgRequestsPerUser: NonNegativeFloat!
+
+  """
+  User retention rate (0-1)
+  """
+  retentionRate: NonNegativeFloat!
+
+  """
+  Churn rate (0-1)
+  """
+  churnRate: NonNegativeFloat!
+}
+
+"""
+Role count
+"""
+type RoleCount {
+  """
+  Role
+  """
+  role: Role!
+
+  """
+  Count
+  """
+  count: NonNegativeInt!
+
+  """
+  Percentage of total
+  """
+  percentage: NonNegativeFloat!
+}
+
+"""
+Revenue metrics
+"""
+type RevenueMetrics {
+  """
+  Total revenue
+  """
+  total: Money!
+
+  """
+  Revenue from subscriptions
+  """
+  subscriptions: Money!
+
+  """
+  Revenue from pay-per-use
+  """
+  payPerUse: Money!
+
+  """
+  Average revenue per user (ARPU)
+  """
+  arpu: Money!
+
+  """
+  Monthly recurring revenue (MRR)
+  """
+  mrr: Money!
+
+  """
+  Annual recurring revenue (ARR)
+  """
+  arr: Money!
+
+  """
+  Growth rate compared to previous period
+  """
+  growthRate: Float!
+
+  """
+  Revenue by service
+  """
+  byService: [ServiceRevenue!]!
+
+  """
+  Revenue by provider
+  """
+  byProvider: [ProviderRevenue!]!
+}
+
+"""
+Service revenue
+"""
+type ServiceRevenue {
+  """
+  Service ID
+  """
+  serviceId: ID!
+
+  """
+  Service name
+  """
+  serviceName: String!
+
+  """
+  Revenue
+  """
+  revenue: Money!
+
+  """
+  Number of users
+  """
+  users: NonNegativeInt!
+}
+
+"""
+Provider revenue
+"""
+type ProviderRevenue {
+  """
+  Provider ID
+  """
+  providerId: ID!
+
+  """
+  Provider name
+  """
+  providerName: String!
+
+  """
+  Revenue
+  """
+  revenue: Money!
+
+  """
+  Number of services
+  """
+  services: NonNegativeInt!
+}
+
+"""
+Service ranking
+"""
+type ServiceRanking {
+  """
+  Rank
+  """
+  rank: PositiveInt!
+
+  """
+  Service
+  """
+  service: Service!
+
+  """
+  Metric value
+  """
+  value: NonNegativeFloat!
+
+  """
+  Metric type
+  """
+  metricType: RankingMetric!
+}
+
+"""
+Ranking metrics
+"""
+enum RankingMetric {
+  """
+  By usage count
+  """
+  USAGE
+
+  """
+  By rating
+  """
+  RATING
+
+  """
+  By revenue
+  """
+  REVENUE
+
+  """
+  By growth
+  """
+  GROWTH
+}
+
+"""
+Provider ranking
+"""
+type ProviderRanking {
+  """
+  Rank
+  """
+  rank: PositiveInt!
+
+  """
+  Provider
+  """
+  provider: Provider!
+
+  """
+  Metric value
+  """
+  value: NonNegativeFloat!
+
+  """
+  Metric type
+  """
+  metricType: RankingMetric!
+}
+
+"""
+Category trend
+"""
+type CategoryTrend {
+  """
+  Category name
+  """
+  category: String!
+
+  """
+  Current count
+  """
+  count: NonNegativeInt!
+
+  """
+  Growth percentage
+  """
+  growth: Float!
+
+  """
+  Trending score
+  """
+  trendingScore: NonNegativeFloat!
+}
+
+"""
+Geographic metrics
+"""
+type GeographicMetric {
+  """
+  Country code (ISO 3166-1 alpha-2)
+  """
+  country: String!
+
+  """
+  Country name
+  """
+  countryName: String!
+
+  """
+  Request count
+  """
+  requests: NonNegativeInt!
+
+  """
+  User count
+  """
+  users: NonNegativeInt!
+
+  """
+  Revenue
+  """
+  revenue: Money!
+}
+
+"""
+Audit log entry
+"""
+type AuditLog {
+  """
+  Log entry ID
+  """
+  id: ID!
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  User who performed the action
+  """
+  userId: ID!
+
+  """
+  User email
+  """
+  userEmail: EmailAddress
+
+  """
+  User role at time of action
+  """
+  userRole: Role!
+
+  """
+  Action performed
+  """
+  action: AuditAction!
+
+  """
+  Resource type
+  """
+  resourceType: String!
+
+  """
+  Resource ID
+  """
+  resourceId: ID
+
+  """
+  Action details
+  """
+  details: JSON
+
+  """
+  IP address
+  """
+  ipAddress: String
+
+  """
+  User agent
+  """
+  userAgent: String
+
+  """
+  Status of the action
+  """
+  status: AuditStatus!
+
+  """
+  Error message (if failed)
+  """
+  errorMessage: String
+}
+
+"""
+Audit actions
+"""
+enum AuditAction {
+  # Service actions
+  SERVICE_CREATED
+  SERVICE_UPDATED
+  SERVICE_DELETED
+  SERVICE_APPROVED
+  SERVICE_REJECTED
+  SERVICE_PUBLISHED
+  SERVICE_DEPRECATED
+
+  # User actions
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_ROLE_CHANGED
+  USER_SUSPENDED
+  USER_ACTIVATED
+
+  # Authentication actions
+  USER_LOGIN
+  USER_LOGOUT
+  USER_PASSWORD_CHANGED
+  USER_PASSWORD_RESET
+
+  # Billing actions
+  PAYMENT_PROCESSED
+  INVOICE_GENERATED
+  REFUND_ISSUED
+
+  # Settings actions
+  SETTINGS_UPDATED
+  API_KEY_CREATED
+  API_KEY_REVOKED
+
+  # Admin actions
+  ADMIN_ACTION
+  SYSTEM_CONFIGURATION_CHANGED
+}
+
+"""
+Audit status
+"""
+enum AuditStatus {
+  """
+  Action succeeded
+  """
+  SUCCESS
+
+  """
+  Action failed
+  """
+  FAILED
+
+  """
+  Action in progress
+  """
+  IN_PROGRESS
+}
+
+"""
+Audit log edge for pagination
+"""
+type AuditLogEdge implements Edge {
+  """
+  The audit log node
+  """
+  node: AuditLog!
+
+  """
+  Cursor for this edge
+  """
+  cursor: String!
+}
+
+"""
+Audit log connection for pagination
+"""
+type AuditLogConnection implements Connection {
+  """
+  List of audit log edges
+  """
+  edges: [AuditLogEdge!]!
+
+  """
+  Page information
+  """
+  pageInfo: PageInfo!
+
+  """
+  Total count (if available)
+  """
+  totalCount: Int
+}
+
+"""
+Audit log filter
+"""
+input AuditLogFilter {
+  """
+  Filter by user ID
+  """
+  userId: ID
+
+  """
+  Filter by action
+  """
+  action: AuditAction
+
+  """
+  Filter by resource type
+  """
+  resourceType: String
+
+  """
+  Filter by resource ID
+  """
+  resourceId: ID
+
+  """
+  Filter by status
+  """
+  status: AuditStatus
+
+  """
+  Filter by time range
+  """
+  timeRange: TimeRangeInput
+
+  """
+  Sort field
+  """
+  sortBy: AuditLogSortField
+
+  """
+  Sort order
+  """
+  sortOrder: SortOrder
+}
+
+"""
+Audit log sort fields
+"""
+enum AuditLogSortField {
+  TIMESTAMP
+  USER_ID
+  ACTION
+}
+
+"""
+Platform statistics
+"""
+type PlatformStats {
+  """
+  Current timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  Total services
+  """
+  totalServices: NonNegativeInt!
+
+  """
+  Total users
+  """
+  totalUsers: NonNegativeInt!
+
+  """
+  Total providers
+  """
+  totalProviders: NonNegativeInt!
+
+  """
+  Total API calls (all time)
+  """
+  totalApiCalls: NonNegativeInt!
+
+  """
+  Active services (last 30 days)
+  """
+  activeServices: NonNegativeInt!
+
+  """
+  Active users (last 30 days)
+  """
+  activeUsers: NonNegativeInt!
+
+  """
+  Services pending approval
+  """
+  pendingApprovals: NonNegativeInt!
+
+  """
+  Platform uptime (0-100)
+  """
+  platformUptime: NonNegativeFloat!
+
+  """
+  Average service rating
+  """
+  avgServiceRating: NonNegativeFloat!
+
+  """
+  Total revenue (all time)
+  """
+  totalRevenue: Money!
+
+  """
+  System health
+  """
+  health: SystemHealth!
+}
+
+"""
+System health metrics
+"""
+type SystemHealth {
+  """
+  Overall health status
+  """
+  status: HealthLevel!
+
+  """
+  CPU usage percentage (0-100)
+  """
+  cpuUsage: NonNegativeFloat!
+
+  """
+  Memory usage percentage (0-100)
+  """
+  memoryUsage: NonNegativeFloat!
+
+  """
+  Disk usage percentage (0-100)
+  """
+  diskUsage: NonNegativeFloat!
+
+  """
+  Database connection pool status
+  """
+  databaseStatus: HealthLevel!
+
+  """
+  Cache status
+  """
+  cacheStatus: HealthLevel!
+
+  """
+  Queue status
+  """
+  queueStatus: HealthLevel!
+
+  """
+  Active incidents
+  """
+  incidents: [Incident!]!
+}
+
+"""
+Health levels
+"""
+enum HealthLevel {
+  """
+  Healthy
+  """
+  HEALTHY
+
+  """
+  Degraded performance
+  """
+  DEGRADED
+
+  """
+  Unhealthy
+  """
+  UNHEALTHY
+
+  """
+  Critical
+  """
+  CRITICAL
+}
+
+"""
+System incident
+"""
+type Incident {
+  """
+  Incident ID
+  """
+  id: ID!
+
+  """
+  Incident title
+  """
+  title: String!
+
+  """
+  Incident description
+  """
+  description: String!
+
+  """
+  Severity
+  """
+  severity: IncidentSeverity!
+
+  """
+  Status
+  """
+  status: IncidentStatus!
+
+  """
+  When incident started
+  """
+  startedAt: DateTime!
+
+  """
+  When incident was resolved
+  """
+  resolvedAt: DateTime
+
+  """
+  Affected services
+  """
+  affectedServices: [String!]!
+}
+
+"""
+Incident severity
+"""
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+"""
+Incident status
+"""
+enum IncidentStatus {
+  """
+  Investigating
+  """
+  INVESTIGATING
+
+  """
+  Identified
+  """
+  IDENTIFIED
+
+  """
+  Monitoring
+  """
+  MONITORING
+
+  """
+  Resolved
+  """
+  RESOLVED
+}
+
+"""
+Service approval result
+"""
+type ApprovalResult {
+  """
+  Whether approval was successful
+  """
+  success: Boolean!
+
+  """
+  Approved service
+  """
+  service: Service
+
+  """
+  Approval message
+  """
+  message: String!
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+}
+
+"""
+Service rejection result
+"""
+type RejectionResult {
+  """
+  Whether rejection was successful
+  """
+  success: Boolean!
+
+  """
+  Rejected service
+  """
+  service: Service
+
+  """
+  Rejection reason
+  """
+  reason: String!
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+}
+
+"""
+User management actions
+"""
+enum UserAction {
+  """
+  Suspend user account
+  """
+  SUSPEND
+
+  """
+  Activate user account
+  """
+  ACTIVATE
+
+  """
+  Delete user account
+  """
+  DELETE
+
+  """
+  Change user role
+  """
+  CHANGE_ROLE
+
+  """
+  Reset user password
+  """
+  RESET_PASSWORD
+
+  """
+  Verify user email
+  """
+  VERIFY_EMAIL
+
+  """
+  Grant permission
+  """
+  GRANT_PERMISSION
+
+  """
+  Revoke permission
+  """
+  REVOKE_PERMISSION
+}
+
+"""
+User management result
+"""
+type UserManagementResult {
+  """
+  Whether action was successful
+  """
+  success: Boolean!
+
+  """
+  User ID
+  """
+  userId: ID!
+
+  """
+  Action performed
+  """
+  action: UserAction!
+
+  """
+  Result message
+  """
+  message: String!
+
+  """
+  Timestamp
+  """
+  timestamp: DateTime!
+
+  """
+  Additional data
+  """
+  data: JSON
+}

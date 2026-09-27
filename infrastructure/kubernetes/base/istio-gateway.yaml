@@ -1,0 +1,236 @@
+---
+# Istio Gateway for external traffic
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: marketplace-gateway
+  namespace: llm-marketplace
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: marketplace-tls-cert
+      hosts:
+        - "*.marketplace.example.com"
+        - "marketplace.example.com"
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.marketplace.example.com"
+        - "marketplace.example.com"
+      tls:
+        httpsRedirect: true
+---
+# Virtual Service for routing
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: marketplace-routes
+  namespace: llm-marketplace
+spec:
+  hosts:
+    - "marketplace.example.com"
+    - "api.marketplace.example.com"
+  gateways:
+    - marketplace-gateway
+  http:
+    # Publishing Service Routes
+    - match:
+        - uri:
+            prefix: /api/v1/services
+        - uri:
+            prefix: /api/v1/publish
+      route:
+        - destination:
+            host: publishing-service
+            port:
+              number: 3001
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+
+    # Discovery Service Routes
+    - match:
+        - uri:
+            prefix: /api/v1/search
+        - uri:
+            prefix: /api/v1/discover
+        - uri:
+            prefix: /api/v1/recommendations
+      route:
+        - destination:
+            host: discovery-service
+            port:
+              number: 3002
+      timeout: 5s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+
+    # Consumption Service Routes
+    - match:
+        - uri:
+            prefix: /api/v1/consume
+        - uri:
+            prefix: /api/v1/invoke
+        - uri:
+            prefix: /api/v1/usage
+      route:
+        - destination:
+            host: consumption-service
+            port:
+              number: 3003
+      timeout: 60s
+      retries:
+        attempts: 2
+        perTryTimeout: 30s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+
+    # Admin Service Routes
+    - match:
+        - uri:
+            prefix: /api/v1/admin
+      route:
+        - destination:
+            host: admin-service
+            port:
+              number: 3004
+      timeout: 30s
+---
+# Destination Rules for traffic policies
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: publishing-destination
+  namespace: llm-marketplace
+spec:
+  host: publishing-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+      http:
+        http1MaxPendingRequests: 1000
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 100
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: discovery-destination
+  namespace: llm-marketplace
+spec:
+  host: discovery-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 5000
+      http:
+        http1MaxPendingRequests: 5000
+        http2MaxRequests: 5000
+        maxRequestsPerConnection: 50
+    loadBalancer:
+      consistentHash:
+        httpQueryParameterName: query
+    outlierDetection:
+      consecutiveErrors: 3
+      interval: 10s
+      baseEjectionTime: 10s
+      maxEjectionPercent: 30
+      minHealthPercent: 70
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: consumption-destination
+  namespace: llm-marketplace
+spec:
+  host: consumption-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 10000
+      http:
+        http1MaxPendingRequests: 10000
+        http2MaxRequests: 10000
+        maxRequestsPerConnection: 10
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+---
+# Peer Authentication for mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: llm-marketplace
+spec:
+  mtls:
+    mode: STRICT
+---
+# Authorization Policy
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: marketplace-authz
+  namespace: llm-marketplace
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["llm-marketplace", "istio-system"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+---
+# Service Mesh Configuration for Telemetry
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: marketplace-telemetry
+  namespace: llm-marketplace
+spec:
+  tracing:
+    - providers:
+        - name: jaeger
+      randomSamplingPercentage: 100.0
+  metrics:
+    - providers:
+        - name: prometheus

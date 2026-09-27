@@ -1,0 +1,202 @@
+# Stress Chaos Experiments
+# Tests system behavior under resource exhaustion
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: stress
+    severity: medium
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: graphql-gateway
+      chaos-ready: "true"
+  stressors:
+    cpu:
+      workers: 2
+      load: 80  # 80% CPU load
+  duration: "5m"
+
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-stress
+  namespace: chaos-testing
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: ml-recommendations
+  stressors:
+    memory:
+      workers: 4
+      size: "1GB"
+      options:
+        - "--vm-keep"  # Keep allocating
+  duration: "3m"
+
+---
+# Memory percentage stress
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-percentage-stress
+  namespace: chaos-testing
+spec:
+  mode: fixed-percent
+  value: "50"  # Affect 50% of pods
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      tier: backend
+  stressors:
+    memory:
+      workers: 2
+      size: "512MB"
+      time: "180s"
+  duration: "3m"
+
+---
+# Combined CPU and Memory stress
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: combined-stress
+  namespace: chaos-testing
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: tenant-management
+  stressors:
+    cpu:
+      workers: 2
+      load: 50
+    memory:
+      workers: 2
+      size: "256MB"
+  duration: "5m"
+
+---
+# Disk I/O stress
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: disk-stress
+  namespace: chaos-testing
+spec:
+  action: mixed
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: postgres
+  volumePath: /var/lib/postgresql/data
+  path: /var/lib/postgresql/data/*
+  delay: "100ms"
+  percent: 50
+  duration: "3m"
+
+---
+# Disk fill stress
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: disk-fill
+  namespace: chaos-testing
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+  stressors:
+    disk:
+      workers: 1
+      size: "5GB"
+      path: "/tmp"
+  duration: "2m"
+
+---
+# Network I/O stress
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: network-io-stress
+  namespace: chaos-testing
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: graphql-gateway
+  stressors:
+    cpu:
+      workers: 1
+      load: 30
+  duration: "5m"
+  containerNames:
+    - graphql-gateway
+
+---
+# Graduated stress - increasing load over time
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: graduated-stress
+  namespace: chaos-testing
+spec:
+  schedule: "@every 2h"
+  type: StressChaos
+  historyLimit: 3
+  stressChaos:
+    mode: one
+    selector:
+      namespaces:
+        - llm-marketplace
+      labelSelectors:
+        tier: backend
+    stressors:
+      cpu:
+        workers: 1
+        load: 50  # Will be increased manually
+    duration: "5m"
+
+---
+# Memory leak simulation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-leak-sim
+  namespace: chaos-testing
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - llm-marketplace
+    labelSelectors:
+      app: ml-recommendations
+  stressors:
+    memory:
+      workers: 1
+      size: "100MB"
+      options:
+        - "--vm-hang"
+        - "120"  # Hang for 2 minutes
+  duration: "10m"
+  scheduler:
+    cron: "@every 4h"

@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: policy-engine
+  namespace: llm-marketplace
+  labels:
+    app: policy-engine
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: policy-engine
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

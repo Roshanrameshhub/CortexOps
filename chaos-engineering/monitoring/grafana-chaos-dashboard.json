@@ -1,0 +1,353 @@
+{
+  "dashboard": {
+    "title": "Chaos Engineering Dashboard",
+    "uid": "chaos-engineering",
+    "timezone": "utc",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "10s",
+    "tags": ["chaos", "resilience", "slo"],
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active Chaos Experiments",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(chaos_mesh_experiments_total{status=\"running\"})",
+            "legendFormat": "Running Experiments",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 3, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Chaos Blast Radius",
+        "type": "gauge",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "chaos:blast_radius:percentage",
+            "legendFormat": "% of Pods Affected",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 30, "color": "yellow"},
+                {"value": 50, "color": "orange"},
+                {"value": 70, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "SLO: Error Rate (Target: <1%)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 4},
+        "targets": [
+          {
+            "expr": "chaos:slo:error_rate:1m * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "A"
+          },
+          {
+            "expr": "1",
+            "legendFormat": "SLO Threshold (1%)",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "SLO Threshold (1%)"},
+              "properties": [
+                {"id": "custom.lineStyle", "value": {"dash": [10, 10]}},
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 4,
+        "title": "SLO: P95 Latency (Target: <2s)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "chaos:slo:latency:p95:1m",
+            "legendFormat": "{{service}} P95",
+            "refId": "A"
+          },
+          {
+            "expr": "2",
+            "legendFormat": "SLO Threshold (2s)",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 5
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Pod Availability by Namespace",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "chaos:pods:availability:percentage",
+            "legendFormat": "{{namespace}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {
+              "lineWidth": 2
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Chaos Experiments Timeline",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 10, "w": 24, "h": 6},
+        "targets": [
+          {
+            "expr": "chaos:experiments:total",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "indexByName": {
+                "namespace": 0,
+                "experiment": 1,
+                "status": 2,
+                "Value": 3
+              },
+              "renameByName": {
+                "namespace": "Namespace",
+                "experiment": "Experiment",
+                "status": "Status",
+                "Value": "Count"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Database Connection Pool",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "chaos:database:connection_utilization * 100",
+            "legendFormat": "Connection Utilization %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 70, "color": "yellow"},
+                {"value": 90, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Cache Hit Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "chaos:cache:hit_rate * 100",
+            "legendFormat": "Hit Rate %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 70, "color": "yellow"},
+                {"value": 90, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Cache Memory Utilization",
+        "type": "gauge",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "chaos:cache:memory_utilization * 100",
+            "legendFormat": "Memory Used %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Recovery Time After Chaos",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 22, "w": 12, "h": 4},
+        "targets": [
+          {
+            "expr": "chaos:recovery:duration_seconds",
+            "legendFormat": "Time Since Last Experiment",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 60, "color": "yellow"},
+                {"value": 300, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Pod Restart Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 22, "w": 12, "h": 4},
+        "targets": [
+          {
+            "expr": "rate(kube_pod_container_status_restarts_total[5m])",
+            "legendFormat": "{{pod}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {
+              "lineWidth": 1
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "query": "label_values(kube_pod_info, namespace)",
+          "current": {"text": "llm-marketplace", "value": "llm-marketplace"},
+          "multi": false,
+          "includeAll": false
+        },
+        {
+          "name": "experiment",
+          "type": "query",
+          "query": "label_values(chaos_mesh_experiments_total, experiment)",
+          "current": {"text": "All", "value": "$__all"},
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Chaos Events",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertname=~\"Chaos.*\"}",
+          "iconColor": "red",
+          "tagKeys": "alertname,severity"
+        }
+      ]
+    }
+  }
+}

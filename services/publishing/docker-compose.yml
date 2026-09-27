@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  publishing-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llm-marketplace-publishing
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: llm_marketplace
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      REGISTRY_API_URL: ${REGISTRY_API_URL:-http://registry:3010/api/v1}
+      POLICY_ENGINE_GRPC_URL: ${POLICY_ENGINE_GRPC_URL:-policy-engine:50051}
+      GOVERNANCE_DASHBOARD_GRAPHQL_URL: ${GOVERNANCE_DASHBOARD_GRAPHQL_URL:-http://governance:3020/graphql}
+      ANALYTICS_HUB_KAFKA_BROKERS: ${ANALYTICS_HUB_KAFKA_BROKERS:-kafka:9092}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - llm-marketplace
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: llm-marketplace-postgres
+    environment:
+      POSTGRES_DB: llm_marketplace
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - llm-marketplace
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: llm-marketplace-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - llm-marketplace
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  llm-marketplace:
+    driver: bridge

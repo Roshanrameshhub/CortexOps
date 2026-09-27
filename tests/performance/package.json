@@ -1,0 +1,54 @@
+{
+  "name": "@llm-marketplace/performance-tests",
+  "version": "1.0.0",
+  "description": "Performance testing suite for LLM-Marketplace platform",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:all",
+    "test:all": "npm run test:api && npm run test:workflow && npm run test:load",
+    "test:api": "k6 run scenarios/api-performance.js",
+    "test:workflow": "k6 run scenarios/workflow-performance.js",
+    "test:load": "k6 run scenarios/load-test.js",
+    "test:spike": "k6 run scenarios/spike-test.js",
+    "test:soak": "k6 run scenarios/soak-test.js",
+    "test:stress": "k6 run scenarios/stress-test.js",
+    "test:baseline": "npm run test:all -- --out json=baselines/baseline-$(date +%Y%m%d-%H%M%S).json",
+    "test:compare": "node scripts/compare-performance.js",
+    "test:ci": "k6 run --quiet --no-color scenarios/api-performance.js && k6 run --quiet --no-color scenarios/workflow-performance.js",
+    "report": "node scripts/generate-report.js",
+    "clean": "rm -rf reports/* && echo 'Reports cleaned'",
+    "setup": "node scripts/setup-test-data.js",
+    "teardown": "node scripts/cleanup-test-data.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roshanrameshhub/inferops.git"
+  },
+  "keywords": [
+    "performance",
+    "testing",
+    "k6",
+    "load-testing",
+    "benchmarking"
+  ],
+  "author": "DevOps Team",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "k6": "^0.0.0"
+  },
+  "devDependencies": {
+    "@types/k6": "^0.50.0",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.3",
+    "commander": "^11.1.0",
+    "date-fns": "^2.30.0",
+    "lodash": "^4.17.21",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

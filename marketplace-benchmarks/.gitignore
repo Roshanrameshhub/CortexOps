@@ -1,0 +1,18 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Benchmark outputs (keep directory structure, ignore generated files)
+benchmarks/output/raw/*.json
+benchmarks/output/summary.md
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

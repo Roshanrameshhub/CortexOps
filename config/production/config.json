@@ -1,0 +1,144 @@
+{
+  "environment": "production",
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origin": ["https://llm-marketplace.example.com"],
+      "credentials": true
+    }
+  },
+  "database": {
+    "postgres": {
+      "host": "${DB_HOST}",
+      "port": 5432,
+      "database": "llm_marketplace",
+      "user": "${DB_USER}",
+      "password": "${DB_PASSWORD}",
+      "pool": {
+        "min": 10,
+        "max": 50
+      },
+      "ssl": true,
+      "sslMode": "verify-full"
+    }
+  },
+  "cache": {
+    "redis": {
+      "host": "${REDIS_HOST}",
+      "port": 6379,
+      "password": "${REDIS_PASSWORD}",
+      "db": 0,
+      "ttl": 600,
+      "cluster": true
+    }
+  },
+  "search": {
+    "elasticsearch": {
+      "url": "${ELASTICSEARCH_URL}",
+      "indexPrefix": "marketplace-prod",
+      "username": "${ELASTICSEARCH_USERNAME}",
+      "password": "${ELASTICSEARCH_PASSWORD}",
+      "ssl": true
+    }
+  },
+  "messaging": {
+    "kafka": {
+      "brokers": "${KAFKA_BROKERS}".split(","),
+      "clientId": "llm-marketplace-prod",
+      "groupId": "marketplace-consumers-prod",
+      "topicPrefix": "marketplace-prod",
+      "ssl": true,
+      "sasl": {
+        "mechanism": "scram-sha-512",
+        "username": "${KAFKA_USERNAME}",
+        "password": "${KAFKA_PASSWORD}"
+      }
+    }
+  },
+  "observability": {
+    "jaeger": {
+      "enabled": true,
+      "endpoint": "${JAEGER_ENDPOINT}",
+      "samplerType": "probabilistic",
+      "samplerParam": 0.01
+    },
+    "prometheus": {
+      "enabled": true,
+      "port": 9091
+    },
+    "logging": {
+      "level": "warn",
+      "format": "json",
+      "output": "stdout"
+    }
+  },
+  "security": {
+    "jwt": {
+      "secret": "${JWT_SECRET}",
+      "expiresIn": "1h",
+      "refreshExpiresIn": "7d",
+      "issuer": "llm-marketplace",
+      "audience": "marketplace-api"
+    },
+    "rateLimiting": {
+      "enabled": true,
+      "windowMs": 60000,
+      "maxRequests": 100
+    },
+    "helmet": {
+      "enabled": true,
+      "hsts": {
+        "maxAge": 31536000,
+        "includeSubDomains": true,
+        "preload": true
+      }
+    }
+  },
+  "integrations": {
+    "registry": {
+      "url": "${REGISTRY_URL}",
+      "apiKey": "${REGISTRY_API_KEY}",
+      "syncInterval": 300000,
+      "timeout": 5000
+    },
+    "policyEngine": {
+      "url": "${POLICY_ENGINE_URL}",
+      "grpcUrl": "${POLICY_ENGINE_GRPC_URL}",
+      "apiKey": "${POLICY_ENGINE_API_KEY}",
+      "timeout": 5000
+    },
+    "analyticsHub": {
+      "url": "${ANALYTICS_HUB_URL}",
+      "apiKey": "${ANALYTICS_HUB_API_KEY}",
+      "batchSize": 1000,
+      "flushInterval": 5000
+    },
+    "governanceDashboard": {
+      "url": "${GOVERNANCE_DASHBOARD_URL}",
+      "apiKey": "${GOVERNANCE_DASHBOARD_API_KEY}"
+    }
+  },
+  "features": {
+    "aiRecommendations": true,
+    "advancedAnalytics": true,
+    "multiRegion": true,
+    "customDomains": true
+  },
+  "performance": {
+    "compression": {
+      "enabled": true,
+      "threshold": 1024
+    },
+    "caching": {
+      "enabled": true,
+      "staticMaxAge": 86400
+    }
+  },
+  "sla": {
+    "targetUptime": 0.9995,
+    "maxLatencyP95": 200,
+    "maxLatencyP99": 500
+  }
+}

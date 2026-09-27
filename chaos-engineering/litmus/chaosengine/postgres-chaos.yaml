@@ -1,0 +1,277 @@
+# PostgreSQL Chaos Engine
+# Orchestrates database failure scenarios for resilience testing
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: postgres-chaos-engine
+  namespace: chaos-testing
+  labels:
+    app: chaos-test
+    category: database
+    severity: critical
+spec:
+  # Application information
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=postgres'
+    appkind: 'statefulset'
+
+  # Chaos service account
+  chaosServiceAccount: litmus-admin
+
+  # Monitoring enabled
+  monitoring: true
+
+  # Job cleanup policy
+  jobCleanUpPolicy: 'delete'
+
+  # Annotate application
+  annotationCheck: 'true'
+
+  # Engineering configuration
+  engineState: 'active'
+  auxiliaryAppInfo: ''
+
+  # Experiments to run
+  experiments:
+    # Pod delete experiment
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            # Number of pods to delete
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            # Chaos interval
+            - name: CHAOS_INTERVAL
+              value: '10'
+
+            # Force delete
+            - name: FORCE
+              value: 'true'
+
+            # Percentage of pods to delete
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+
+            # Target specific pod
+            - name: TARGET_POD
+              value: 'postgres-0'
+
+            # Ramp time
+            - name: RAMP_TIME
+              value: '5'
+
+    # Container kill experiment
+    - name: container-kill
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            - name: CHAOS_INTERVAL
+              value: '15'
+
+            - name: CONTAINER_RUNTIME
+              value: 'containerd'
+
+            - name: SOCKET_PATH
+              value: '/run/containerd/containerd.sock'
+
+            - name: TARGET_CONTAINER
+              value: 'postgres'
+
+            - name: SIGNAL
+              value: 'SIGKILL'
+
+    # Pod network loss
+    - name: pod-network-loss
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+            - name: NETWORK_PACKET_LOSS_PERCENTAGE
+              value: '50'
+
+            - name: DESTINATION_IPS
+              value: ''  # All traffic
+
+            - name: DESTINATION_HOSTS
+              value: ''
+
+            - name: TARGET_POD
+              value: 'postgres-0'
+
+    # Pod network latency
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+            - name: NETWORK_LATENCY
+              value: '2000'  # 2 seconds
+
+            - name: JITTER
+              value: '500'
+
+            - name: TARGET_POD
+              value: 'postgres-0'
+
+    # Disk fill
+    - name: disk-fill
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: FILL_PERCENTAGE
+              value: '80'
+
+            - name: EPHEMERAL_STORAGE_MEBIBYTES
+              value: ''
+
+            - name: TARGET_POD
+              value: 'postgres-0'
+
+            - name: CONTAINER_PATH
+              value: '/var/lib/postgresql/data'
+
+---
+# PostgreSQL Read Replica Chaos
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: postgres-replica-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=postgres,role=replica'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    # Network partition between primary and replica
+    - name: pod-network-partition
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '120'
+
+            - name: DESTINATION_IPS
+              value: 'postgres-0.postgres.llm-marketplace.svc.cluster.local'
+
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+
+---
+# PostgreSQL CPU Hog
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: postgres-cpu-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=postgres'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    - name: pod-cpu-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: CPU_CORES
+              value: '2'
+
+            - name: CPU_LOAD
+              value: '100'
+
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+
+    # Memory hog
+    - name: pod-memory-hog
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: MEMORY_CONSUMPTION
+              value: '1024'  # MB
+
+            - name: NUMBER_OF_WORKERS
+              value: '4'
+
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+
+---
+# PostgreSQL I/O Chaos
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: postgres-io-chaos
+  namespace: chaos-testing
+spec:
+  appinfo:
+    appns: llm-marketplace
+    applabel: 'app=postgres'
+    appkind: 'statefulset'
+
+  chaosServiceAccount: litmus-admin
+  monitoring: true
+  jobCleanUpPolicy: 'delete'
+  engineState: 'active'
+
+  experiments:
+    - name: pod-io-stress
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: '180'
+
+            - name: FILESYSTEM_UTILIZATION_PERCENTAGE
+              value: '80'
+
+            - name: FILESYSTEM_UTILIZATION_BYTES
+              value: ''
+
+            - name: NUMBER_OF_WORKERS
+              value: '4'
+
+            - name: VOLUME_MOUNT_PATH
+              value: '/var/lib/postgresql/data'
+
+            - name: TARGET_POD
+              value: 'postgres-0'
