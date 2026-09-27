@@ -1,6 +1,6 @@
 # Security Policy
 
-InferOps is an enterprise-grade AI model lifecycle, deployment, and inference operations platform. Security and privacy are central to our design.
+CortexOps is an enterprise-grade AI model lifecycle, deployment, and inference operations platform. Security and privacy are central to our design.
 
 ---
 
@@ -17,7 +17,7 @@ Only the latest release receive active security updates:
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within InferOps, please follow responsible disclosure practices:
+If you discover a security vulnerability within CortexOps, please follow responsible disclosure practices:
 
 1. **Do NOT open a public GitHub issue** to report vulnerabilities.
 2. Report the vulnerability privately via GitHub Security Advisories:

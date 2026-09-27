@@ -2,7 +2,7 @@
 
 # Default target
 help:
-	@echo "InferOps - Available Commands:"
+	@echo "CortexOps - Available Commands:"
 	@echo ""
 	@echo "Setup & Installation:"
 	@echo "  make install-deps        Install all dependencies (Node.js, Go, Rust, Python)"

@@ -68,8 +68,8 @@ The Fine-Tuned Model Marketplace is a production-ready platform for managing, ve
 
 ```bash
 # Clone repository
-git clone https://github.com/roshanrameshhub/inferops.git
-cd inferops/services/model-marketplace
+git clone https://github.com/roshanrameshhub/CortexOps.git
+cd CortexOps/services/model-marketplace
 
 # Install dependencies
 npm install

@@ -22,7 +22,7 @@ npm login
 
 ### Add Token to GitHub:
 
-1. Go to: **https://github.com/roshanrameshhub/inferops/settings/secrets/actions**
+1. Go to: **https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions**
 2. Click **"New repository secret"**
 3. Name: `NPM_TOKEN`
 4. Value: Paste your NPM token
@@ -38,7 +38,7 @@ npm login
 
 **Just click a button in your browser!**
 
-1. Go to: **https://github.com/roshanrameshhub/inferops/actions/workflows/npm-publish.yml**
+1. Go to: **https://github.com/roshanrameshhub/CortexOps/actions/workflows/npm-publish.yml**
 
 2. Click the **"Run workflow"** dropdown button
 
@@ -238,7 +238,7 @@ Before you publish, make sure:
 ### To Publish:
 ```bash
 # Option A: Use GitHub UI (EASIEST!)
-# Go to: https://github.com/roshanrameshhub/inferops/actions/workflows/npm-publish.yml
+# Go to: https://github.com/roshanrameshhub/CortexOps/actions/workflows/npm-publish.yml
 # Click "Run workflow" → Select version type → Click "Run workflow"
 
 # Option B: Use release script
@@ -259,10 +259,10 @@ npm install @llm-dev-ops/llm-marketplace-sdk
 ## 🔗 Important Links
 
 ### GitHub:
-- **Repository**: https://github.com/roshanrameshhub/inferops
-- **Actions**: https://github.com/roshanrameshhub/inferops/actions
-- **Secrets**: https://github.com/roshanrameshhub/inferops/settings/secrets/actions
-- **Workflow**: https://github.com/roshanrameshhub/inferops/actions/workflows/npm-publish.yml
+- **Repository**: https://github.com/roshanrameshhub/CortexOps
+- **Actions**: https://github.com/roshanrameshhub/CortexOps/actions
+- **Secrets**: https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions
+- **Workflow**: https://github.com/roshanrameshhub/CortexOps/actions/workflows/npm-publish.yml
 
 ### NPM:
 - **Organization**: https://www.npmjs.com/org/llm-dev-ops
@@ -287,7 +287,7 @@ npm run version:patch  # or minor/major
 
 ### GitHub Actions failing
 **Fix**: Check NPM_TOKEN secret is set correctly
-- Go to: https://github.com/roshanrameshhub/inferops/settings/secrets/actions
+- Go to: https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions
 - Update NPM_TOKEN if needed
 
 ### Build errors
@@ -305,7 +305,7 @@ npm run build
 
 - **Full Guide**: See `docs/NPM_PUBLISHING_GUIDE.md` for detailed instructions
 - **Quick Start**: See `NPM_PUBLISHING_QUICK_START.md` for quick reference
-- **GitHub Issues**: https://github.com/roshanrameshhub/inferops/issues
+- **GitHub Issues**: https://github.com/roshanrameshhub/CortexOps/issues
 
 ---
 

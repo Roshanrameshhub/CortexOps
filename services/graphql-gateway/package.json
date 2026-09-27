@@ -38,13 +38,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/roshanrameshhub/inferops.git",
+    "url": "https://github.com/roshanrameshhub/CortexOps.git",
     "directory": "services/graphql-gateway"
   },
   "bugs": {
-    "url": "https://github.com/roshanrameshhub/inferops/issues"
+    "url": "https://github.com/roshanrameshhub/CortexOps/issues"
   },
-  "homepage": "https://github.com/roshanrameshhub/inferops/tree/main/services/graphql-gateway#readme",
+  "homepage": "https://github.com/roshanrameshhub/CortexOps/tree/main/services/graphql-gateway#readme",
   "dependencies": {
     "@apollo/server": "^4.10.0",
     "@apollo/subgraph": "^2.6.1",

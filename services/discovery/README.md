@@ -99,8 +99,8 @@ The Discovery Service provides advanced search, filtering, and recommendation ca
 
 ```bash
 # Clone the repository
-git clone https://github.com/roshanrameshhub/inferops.git
-cd inferops/services/discovery
+git clone https://github.com/roshanrameshhub/CortexOps.git
+cd CortexOps/services/discovery
 
 # Copy environment file
 cp .env.example .env

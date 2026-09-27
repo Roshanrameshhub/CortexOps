@@ -53,8 +53,8 @@
 **Clone and Initialize:**
 ```bash
 # Clone repository
-git clone https://github.com/roshanrameshhub/inferops.git
-cd inferops
+git clone https://github.com/roshanrameshhub/CortexOps.git
+cd CortexOps
 
 # Install dependencies
 make install-deps

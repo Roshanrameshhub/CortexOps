@@ -1,4 +1,4 @@
-# InferOps Unified Service
+# CortexOps Unified Service
 # Lightweight container for Cloud Run deployment
 
 FROM node:20-alpine

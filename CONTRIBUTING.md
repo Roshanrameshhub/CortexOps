@@ -1,6 +1,6 @@
-# Contributing to InferOps
+# Contributing to CortexOps
 
-Thank you for your interest in contributing to **InferOps**! We welcome contributions, bug fixes, enhancements, and documentation improvements.
+Thank you for your interest in contributing to **CortexOps**! We welcome contributions, bug fixes, enhancements, and documentation improvements.
 
 ---
 
@@ -17,8 +17,8 @@ We are committed to providing a welcoming, inclusive, and harassment-free enviro
 
 2. **Clone Your Fork**
    ```bash
-   git clone https://github.com/roshanrameshhub/inferops.git
-   cd inferops
+   git clone https://github.com/roshanrameshhub/CortexOps.git
+   cd CortexOps
    ```
 
 3. **Set Up Development Environment**
@@ -45,7 +45,7 @@ We are committed to providing a welcoming, inclusive, and harassment-free enviro
 Before submitting your changes, ensure your code complies with our standards:
 
 ### Monorepo & Workspaces
-InferOps uses npm workspaces across multiple packages and services:
+CortexOps uses npm workspaces across multiple packages and services:
 - `services/publishing` (TypeScript)
 - `services/admin` (Python/FastAPI)
 - `services/consumption` (Rust/Axum)

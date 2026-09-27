@@ -539,7 +539,7 @@ Copyright © 2025 LLM-Marketplace. All rights reserved.
 ## Support
 
 - **Documentation:** [/docs/policy-engine/](../../docs/policy-engine/)
-- **Issues:** [GitHub Issues](https://github.com/roshanrameshhub/inferops/issues)
+- **Issues:** [GitHub Issues](https://github.com/roshanrameshhub/CortexOps/issues)
 - **Slack:** #policy-engine
 
 ## Changelog

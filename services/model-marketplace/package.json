@@ -74,13 +74,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/roshanrameshhub/inferops.git",
+    "url": "https://github.com/roshanrameshhub/CortexOps.git",
     "directory": "services/model-marketplace"
   },
   "bugs": {
-    "url": "https://github.com/roshanrameshhub/inferops/issues"
+    "url": "https://github.com/roshanrameshhub/CortexOps/issues"
   },
-  "homepage": "https://github.com/roshanrameshhub/inferops/tree/main/services/model-marketplace#readme",
+  "homepage": "https://github.com/roshanrameshhub/CortexOps/tree/main/services/model-marketplace#readme",
   "keywords": [
     "llm",
     "marketplace",

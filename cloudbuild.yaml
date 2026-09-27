@@ -1,4 +1,4 @@
-# Cloud Build configuration for InferOps Unified Service
+# Cloud Build configuration for CortexOps Unified Service
 # Builds and deploys to Google Cloud Run
 
 substitutions:
@@ -123,7 +123,7 @@ steps:
       - '-c'
       - |
         echo "======================================"
-        echo "INFEROPS DEPLOYMENT COMPLETE"
+        echo "CORTEXOPS DEPLOYMENT COMPLETE"
         echo "======================================"
         gcloud run services describe ${_SERVICE_NAME} --region=${_REGION} --format='yaml(status)'
         echo ""

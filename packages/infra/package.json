@@ -40,13 +40,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/roshanrameshhub/inferops.git",
+    "url": "https://github.com/roshanrameshhub/CortexOps.git",
     "directory": "packages/infra"
   },
   "bugs": {
-    "url": "https://github.com/roshanrameshhub/inferops/issues"
+    "url": "https://github.com/roshanrameshhub/CortexOps/issues"
   },
-  "homepage": "https://github.com/roshanrameshhub/inferops#readme",
+  "homepage": "https://github.com/roshanrameshhub/CortexOps#readme",
   "dependencies": {
     "@opentelemetry/api": "^1.7.0",
     "@opentelemetry/exporter-jaeger": "^1.19.0",

@@ -553,7 +553,7 @@ MIT License - see [LICENSE](./LICENSE) for details.
 ## Support
 
 - **Documentation**: [https://docs.llm-marketplace.com](https://docs.llm-marketplace.com)
-- **GitHub Issues**: [https://github.com/roshanrameshhub/inferops/issues](https://github.com/roshanrameshhub/inferops/issues)
+- **GitHub Issues**: [https://github.com/roshanrameshhub/CortexOps/issues](https://github.com/roshanrameshhub/CortexOps/issues)
 - **Email**: support@llm-marketplace.com
 
 ## Changelog

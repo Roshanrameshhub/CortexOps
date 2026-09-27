@@ -1,19 +1,19 @@
-# InferOps
+# CortexOps
 
 > AI-powered cloud-native platform for AI model lifecycle, deployment, governance, and inference operations.
 
-[![CI/CD Pipeline](https://github.com/roshanrameshhub/inferops/actions/workflows/ci-cd-pipeline.yaml/badge.svg)](https://github.com/roshanrameshhub/inferops/actions)
+[![CI/CD Pipeline](https://github.com/roshanrameshhub/CortexOps/actions/workflows/ci-cd-pipeline.yaml/badge.svg)](https://github.com/roshanrameshhub/CortexOps/actions)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/roshanrameshhub/inferops)
-[![Status](https://img.shields.io/badge/status-production%20ready-success.svg)](https://github.com/roshanrameshhub/inferops)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/roshanrameshhub/CortexOps)
+[![Status](https://img.shields.io/badge/status-production%20ready-success.svg)](https://github.com/roshanrameshhub/CortexOps)
 
 ---
 
 ## Overview
 
-**InferOps** is an enterprise-grade, cloud-native platform designed to orchestrate the end-to-end lifecycle of AI models and LLM services. Modern organizations deploying AI models at scale face severe operational hurdles: fragmented model discovery, lack of centralized governance, inconsistent inference metering, complex multi-tenant quota enforcement, and untracked fine-tuning lineages.
+**CortexOps** is an enterprise-grade, cloud-native platform designed to orchestrate the end-to-end lifecycle of AI models and LLM services. Modern organizations deploying AI models at scale face severe operational hurdles: fragmented model discovery, lack of centralized governance, inconsistent inference metering, complex multi-tenant quota enforcement, and untracked fine-tuning lineages.
 
-InferOps solves these challenges by providing:
+CortexOps solves these challenges by providing:
 - **Intelligent Discovery**: Semantic vector search (768-dimensional embeddings via Elasticsearch) and hybrid recommendation models to discover AI services.
 - **Automated Publishing & Governance**: Multi-phase validation pipelines checking OpenAPI 3.1 specifications, policy compliance, and version lifecycle.
 - **Ultra-Low Latency Inference & Routing**: Zero-copy request routing with token-level metering and Redis-backed rate limiting.
@@ -53,7 +53,7 @@ Every feature listed below is implemented in the codebase:
 
 ## Architecture
 
-InferOps employs an asynchronous, event-driven microservices architecture communicating via REST, gRPC, GraphQL, and Apache Kafka.
+CortexOps employs an asynchronous, event-driven microservices architecture communicating via REST, gRPC, GraphQL, and Apache Kafka.
 
 ```mermaid
 flowchart TD
@@ -150,7 +150,7 @@ flowchart TD
 ## Repository Structure
 
 ```
-InferOps/
+CortexOps/
 ├── .github/workflows/          # GitHub Actions CI/CD, testing, & publishing pipelines
 ├── agents/                     # Specialized autonomous operational agents
 │   ├── deprecation-agent/      # Service and model deprecation lifecycle agent
@@ -276,7 +276,7 @@ npm run build:sdk
 
 ## Docker
 
-InferOps provides multi-stage, hardened Docker images:
+CortexOps provides multi-stage, hardened Docker images:
 - **Local Multi-Service Orchestration**:
   ```bash
   docker compose up -d
@@ -286,7 +286,7 @@ InferOps provides multi-stage, hardened Docker images:
   ```
 - **Unified Cloud Run Container**:
   ```bash
-  docker build -t inferops:latest .
+  docker build -t cortexops:latest .
   ```
 The unified container runs as a non-privileged `marketplace` user with built-in health checks on `/health`.
 
@@ -312,7 +312,7 @@ Kubernetes manifests are located in `infrastructure/kubernetes/`:
 
 ## Helm
 
-InferOps is designed around **Kubernetes native manifests and Kustomize overlays**. Helm charts are currently not bundled; standard deployments use `kubectl apply -k infrastructure/kubernetes/base`.
+CortexOps is designed around **Kubernetes native manifests and Kustomize overlays**. Helm charts are currently not bundled; standard deployments use `kubectl apply -k infrastructure/kubernetes/base`.
 
 ---
 
@@ -360,7 +360,7 @@ Continuous Integration and Continuous Delivery are implemented using **GitHub Ac
 
 ## Observability
 
-InferOps includes a complete observability stack:
+CortexOps includes a complete observability stack:
 - **Metrics**: Prometheus instrumentation across all services exposing endpoints on `/metrics`. Preconfigured scraping in `infrastructure/prometheus/prometheus.yml`.
 - **Dashboards**: Grafana provisioning (`infrastructure/grafana/`) with automated datasource configuration.
 - **Distributed Tracing**: OpenTelemetry SDK integration across TypeScript, Go, and Rust services streaming spans to Jaeger (`http://localhost:16686`).
@@ -370,13 +370,13 @@ InferOps includes a complete observability stack:
 
 ## Security
 
-InferOps adheres to strict security standards:
+CortexOps adheres to strict security standards:
 - **Authentication**: JWT authentication with configurable expiration and OAuth2/Keycloak integration support.
 - **Password & Key Security**: Argon2id cryptographic hashing for administrative credentials and API keys.
 - **Data Protection & Multi-Tenancy**: PostgreSQL Row-Level Security (RLS) ensures complete data separation across tenant boundaries.
 - **Policy Enforcement**: Policy engine validates data residency, compliance, and pricing before requests are executed.
 - **Vulnerability Management**: Continuous scanning via Trivy, OWASP Dependency-Check, and Snyk in CI.
-- **Audit Trails**: Immutable audit logs streamed to Kafka topics (`inferops.audit.logs`) and persisted in PostgreSQL.
+- **Audit Trails**: Immutable audit logs streamed to Kafka topics (`cortexops.audit.logs`) and persisted in PostgreSQL.
 
 ---
 
@@ -407,7 +407,7 @@ All configuration is externalized via environment variables. See [`.env.example`
 
 ## Deployment
 
-InferOps supports three production deployment strategies:
+CortexOps supports three production deployment strategies:
 1. **Google Cloud Run**: Serverless container deployment using `cloudbuild.yaml` and `Dockerfile`.
 2. **Kubernetes (EKS / GKE)**: Declarative multi-service deployment using manifests in `infrastructure/kubernetes/base`.
 3. **Docker Compose**: Containerized multi-service deployment for edge or local server environments using `docker-compose.yml`.

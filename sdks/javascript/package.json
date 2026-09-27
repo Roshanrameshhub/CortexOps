@@ -46,13 +46,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/roshanrameshhub/inferops.git",
+    "url": "https://github.com/roshanrameshhub/CortexOps.git",
     "directory": "sdks/javascript"
   },
   "bugs": {
-    "url": "https://github.com/roshanrameshhub/inferops/issues"
+    "url": "https://github.com/roshanrameshhub/CortexOps/issues"
   },
-  "homepage": "https://github.com/roshanrameshhub/inferops/tree/main/sdks/javascript#readme",
+  "homepage": "https://github.com/roshanrameshhub/CortexOps/tree/main/sdks/javascript#readme",
   "engines": {
     "node": ">=18.0.0"
   },

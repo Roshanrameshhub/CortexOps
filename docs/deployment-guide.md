@@ -50,8 +50,8 @@ This guide covers deploying LLM-Marketplace in various environments.
 
 ```bash
 # Clone repository
-git clone https://github.com/roshanrameshhub/inferops.git
-cd inferops
+git clone https://github.com/roshanrameshhub/CortexOps.git
+cd CortexOps
 
 # Copy environment template
 cp .env.example .env

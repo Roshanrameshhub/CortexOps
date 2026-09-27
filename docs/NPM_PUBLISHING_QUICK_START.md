@@ -14,7 +14,7 @@
    ```
 
 2. **Add to GitHub Secrets**:
-   - Go to: https://github.com/roshanrameshhub/inferops/settings/secrets/actions
+   - Go to: https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions
    - Click **"New repository secret"**
    - Name: `NPM_TOKEN`
    - Value: Your NPM automation token (starts with `npm_...`)
@@ -45,7 +45,7 @@ Make sure you're a member of the `@llm-dev-ops` organization on NPM:
 
 **Trigger automated publishing via GitHub UI:**
 
-1. Go to: https://github.com/roshanrameshhub/inferops/actions/workflows/npm-publish.yml
+1. Go to: https://github.com/roshanrameshhub/CortexOps/actions/workflows/npm-publish.yml
 
 2. Click **"Run workflow"** button
 
@@ -243,9 +243,9 @@ npm view @llm-dev-ops/llm-marketplace-sdk
 ## 🔗 Important Links
 
 - **NPM Organization**: https://www.npmjs.com/org/llm-dev-ops
-- **GitHub Repository**: https://github.com/roshanrameshhub/inferops
-- **GitHub Actions**: https://github.com/roshanrameshhub/inferops/actions
-- **GitHub Secrets**: https://github.com/roshanrameshhub/inferops/settings/secrets/actions
+- **GitHub Repository**: https://github.com/roshanrameshhub/CortexOps
+- **GitHub Actions**: https://github.com/roshanrameshhub/CortexOps/actions
+- **GitHub Secrets**: https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions
 
 ### Published Packages
 
@@ -288,7 +288,7 @@ npm run version:patch
 3. Token hasn't expired
 
 **Re-add token**:
-- Go to: https://github.com/roshanrameshhub/inferops/settings/secrets/actions
+- Go to: https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions
 - Update NPM_TOKEN with new value
 
 ### Build errors
@@ -311,7 +311,7 @@ npm run build
 ## 📞 Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/roshanrameshhub/inferops/issues
+- GitHub Issues: https://github.com/roshanrameshhub/CortexOps/issues
 - Check full guide: [docs/NPM_PUBLISHING_GUIDE.md](docs/NPM_PUBLISHING_GUIDE.md)
 
 ---

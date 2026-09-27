@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["LLM-Dev-Ops Team"]
 description = "Shared infrastructure utilities for LLM-Dev-Ops ecosystem - configuration, logging, tracing, caching, retry, rate-limiting, and error handling"
 license = "MIT"
-repository = "https://github.com/roshanrameshhub/inferops"
+repository = "https://github.com/roshanrameshhub/CortexOps"
 keywords = ["llm", "infrastructure", "logging", "tracing", "config"]
 categories = ["development-tools", "web-programming"]
 

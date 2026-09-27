@@ -38,13 +38,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/roshanrameshhub/inferops.git",
+    "url": "https://github.com/roshanrameshhub/CortexOps.git",
     "directory": "services/tenant-management"
   },
   "bugs": {
-    "url": "https://github.com/roshanrameshhub/inferops/issues"
+    "url": "https://github.com/roshanrameshhub/CortexOps/issues"
   },
-  "homepage": "https://github.com/roshanrameshhub/inferops/tree/main/services/tenant-management#readme",
+  "homepage": "https://github.com/roshanrameshhub/CortexOps/tree/main/services/tenant-management#readme",
   "dependencies": {
     "express": "^4.18.2",
     "typeorm": "^0.3.17",

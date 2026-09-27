@@ -40,7 +40,7 @@ Complete guide for publishing LLM Marketplace packages to NPM registry.
 
 Add the NPM token to GitHub repository secrets:
 
-1. Go to: `https://github.com/roshanrameshhub/inferops/settings/secrets/actions`
+1. Go to: `https://github.com/roshanrameshhub/CortexOps/settings/secrets/actions`
 2. Click "New repository secret"
 3. Name: `NPM_TOKEN`
 4. Value: Your NPM automation token
@@ -87,7 +87,7 @@ npm run publish:packages
 
 1. **Go to GitHub Actions**:
    ```
-   https://github.com/roshanrameshhub/inferops/actions
+   https://github.com/roshanrameshhub/CortexOps/actions
    ```
 
 2. **Select "Publish to NPM" workflow**
@@ -111,7 +111,7 @@ npm run publish:packages
 
 1. **Create a new release**:
    ```
-   https://github.com/roshanrameshhub/inferops/releases/new
+   https://github.com/roshanrameshhub/CortexOps/releases/new
    ```
 
 2. **Fill in release details**:
@@ -413,7 +413,7 @@ The automated publishing workflow (`.github/workflows/npm-publish.yml`) includes
 ## Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/roshanrameshhub/inferops/issues
+- GitHub Issues: https://github.com/roshanrameshhub/CortexOps/issues
 - Email: support@llm-marketplace.com
 
 ## Resources
